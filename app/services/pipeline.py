@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +33,11 @@ class FacePipeline:
         emotion_model: Any | None = None,
         gender_model_path: str | Path = config.GENDER_MODEL_PATH,
         age_model_path: str | Path = config.AGE_MODEL_PATH,
+        optimized: bool = True,
+        embedding_cache_size: int = 1024,
     ) -> None:
+        if embedding_cache_size < 0:
+            raise ValueError("embedding_cache_size must not be negative")
         self.detector = detector or FaceDetector()
         self.embedder = embedder or FaceEmbedder()
         if matcher is None:
@@ -44,22 +50,38 @@ class FacePipeline:
         self.gender_model = gender_model or self._load_model(gender_model_path)
         self.age_model = age_model or self._load_model(age_model_path)
         self.emotion_model = emotion_model or EmotionClassifier()
+        self.optimized = optimized
+        self._embedding_cache: OrderedDict[str, np.ndarray] = OrderedDict()
+        self._embedding_cache_size = embedding_cache_size
 
     def analyze(self, image: np.ndarray) -> list[dict[str, Any]]:
         """Analyze all detected faces that meet the configured minimum size."""
         if image is None or not isinstance(image, np.ndarray) or image.size == 0:
             return []
 
-        results: list[dict[str, Any]] = []
-        for detection in self.detector.detect(image):
-            bbox = detection["bbox"]
-            if not self._meets_minimum_size(bbox):
-                continue
+        detections = [
+            detection
+            for detection in self.detector.detect(image)
+            if self._meets_minimum_size(detection["bbox"])
+        ]
+        if self.optimized:
+            return self._analyze_optimized(image, detections)
+        return self._analyze_faces(image, detections)
 
+    def _analyze_faces(
+        self, image: np.ndarray, detections: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        for detection in detections:
+            bbox = detection["bbox"]
             recognition_face = preprocess_face(
                 image, bbox, detection["landmarks"], model="recognition"
             )
-            embedding = self.embedder.embed(recognition_face)
+            embedding = (
+                self._cached_embedding(recognition_face)
+                if self.optimized
+                else np.asarray(self.embedder.embed(recognition_face), dtype=np.float32)
+            )
             match = self.matcher.identify(embedding)
             if isinstance(match, list):
                 raise TypeError("matcher.identify must return a single match")
@@ -94,6 +116,139 @@ class FacePipeline:
                 }
             )
         return results
+
+    def _analyze_optimized(
+        self, image: np.ndarray, detections: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        if not detections:
+            return []
+
+        recognition_faces = [
+            preprocess_face(
+                image, detection["bbox"], detection["landmarks"], model="recognition"
+            )
+            for detection in detections
+        ]
+        embeddings: list[np.ndarray | None] = [None] * len(recognition_faces)
+        uncached_faces: list[np.ndarray] = []
+        uncached_indices: list[int] = []
+        for index, face in enumerate(recognition_faces):
+            cached = self._embedding_cache.get(self._embedding_key(face))
+            if cached is None:
+                uncached_faces.append(face)
+                uncached_indices.append(index)
+            else:
+                self._embedding_cache.move_to_end(self._embedding_key(face))
+                embeddings[index] = cached
+        if uncached_faces:
+            computed = self._embed_batch(uncached_faces)
+            if computed.ndim == 1:
+                computed = computed.reshape(1, -1)
+            if computed.shape[0] != len(uncached_faces):
+                raise ValueError("embedder returned an unexpected batch size")
+            for index, embedding in zip(uncached_indices, computed):
+                self._cache_embedding(recognition_faces[index], embedding)
+                embeddings[index] = embedding
+
+        attribute_faces = [
+            preprocess_face(
+                image, detection["bbox"], detection["landmarks"], model="gender_age"
+            )
+            for detection in detections
+        ]
+        attribute_batch = np.stack(attribute_faces, axis=0)
+        gender_probabilities = np.asarray(
+            self.gender_model.predict(attribute_batch, verbose=0)
+        ).reshape(-1)
+        ages = np.asarray(self.age_model.predict(attribute_batch, verbose=0)).reshape(-1)
+        if len(gender_probabilities) != len(detections) or len(ages) != len(detections):
+            raise ValueError("attribute models returned an unexpected batch size")
+
+        results: list[dict[str, Any]] = []
+        for index, detection in enumerate(detections):
+            embedding = embeddings[index]
+            if embedding is None:
+                raise RuntimeError("embedding batch contained an empty result")
+            match = self.matcher.identify(embedding)
+            if isinstance(match, list):
+                raise TypeError("matcher.identify must return a single match")
+            gender_probability = float(gender_probabilities[index])
+            age = float(ages[index])
+            emotion = self.emotion_model.predict(
+                self._crop_face(image, detection["bbox"])
+            )
+            results.append(
+                self._result(
+                    detection,
+                    match,
+                    gender_probability,
+                    age,
+                    emotion,
+                )
+            )
+        return results
+
+    def _embed_batch(self, faces: list[np.ndarray]) -> np.ndarray:
+        computed = np.asarray(self.embedder.embed(faces), dtype=np.float32)
+        if computed.ndim == 2 and computed.shape[0] == len(faces):
+            return computed
+        if len(faces) == 1 and computed.ndim == 1:
+            return computed.reshape(1, -1)
+        # Keep custom embedders compatible while FaceEmbedder uses one batch call.
+        return np.stack(
+            [
+                np.asarray(self.embedder.embed(face), dtype=np.float32)
+                for face in faces
+            ]
+        )
+
+    def _cached_embedding(self, face: np.ndarray) -> np.ndarray:
+        key = self._embedding_key(face)
+        cached = self._embedding_cache.get(key)
+        if cached is not None:
+            self._embedding_cache.move_to_end(key)
+            return cached
+        embedding = np.asarray(self.embedder.embed(face), dtype=np.float32)
+        self._cache_embedding(face, embedding)
+        return embedding
+
+    def _cache_embedding(self, face: np.ndarray, embedding: np.ndarray) -> None:
+        if self._embedding_cache_size == 0:
+            return
+        key = self._embedding_key(face)
+        self._embedding_cache[key] = embedding.copy()
+        self._embedding_cache.move_to_end(key)
+        while len(self._embedding_cache) > self._embedding_cache_size:
+            self._embedding_cache.popitem(last=False)
+
+    @staticmethod
+    def _embedding_key(face: np.ndarray) -> str:
+        contiguous = np.ascontiguousarray(face)
+        digest = hashlib.blake2b(digest_size=16)
+        digest.update(contiguous.tobytes())
+        digest.update(str(contiguous.shape).encode("ascii"))
+        return digest.hexdigest()
+
+    @staticmethod
+    def _result(
+        detection: dict[str, Any],
+        match: dict[str, Any],
+        gender_probability: float,
+        age: float,
+        emotion: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "box": [float(value) for value in detection["bbox"]],
+            "name": match["name"],
+            "person_id": match["id"],
+            "match_score": float(match["score"]),
+            "gender": "female" if gender_probability >= 0.5 else "male",
+            "gender_confidence": max(gender_probability, 1.0 - gender_probability),
+            "age": age,
+            "age_group": predict_age_group(age),
+            "emotion": emotion["emotion"],
+            "emotion_confidence": float(emotion["emotion_confidence"]),
+        }
 
     @staticmethod
     def _load_model(model_path: str | Path) -> Any:

@@ -211,6 +211,30 @@ consent timestamp with the registered person. All API routes require the
 `DELETE /people/{person_id}/data` to delete a person's registration,
 recognition logs, and attendance records.
 
+## Inference optimization and benchmarking
+
+The pipeline batches ArcFace embeddings and gender/age predictions for all
+faces in an image. The optimized path also keeps a bounded in-memory cache of
+embeddings for repeated face crops. Use the baseline/optimized benchmark with
+a directory of sample images:
+
+```bash
+python benchmark_pipeline.py data/benchmark --repetitions 3
+```
+
+The script reports average milliseconds per image and per detected face before
+and after batching and caching. Convert the trained gender and age Keras
+models to optimized TensorFlow Lite artifacts with:
+
+```bash
+python convert_models.py --gender-model models/gender.h5 \
+  --age-model models/age.h5 --output-dir models/tflite
+```
+
+The generated `.tflite` files can be loaded through
+`app.core.model_runtime.TFLiteModel` when deploying a lightweight inference
+runtime.
+
 ## Configuration
 
 Update [config.py](config.py) to change image dimensions, confidence thresholds,
