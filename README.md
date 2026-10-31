@@ -123,6 +123,18 @@ is used in both phases, and the best checkpoint is saved to
 `models/age.h5`. Override `--head-epochs`, `--fine-tune-epochs`,
 `--batch-size`, or `--fine-tune-learning-rate` as needed.
 
+## Evaluating trained models
+
+After both models and the processed test split are available, run:
+
+```bash
+python3 evaluate.py
+```
+
+The evaluator writes `reports/metrics.json`, `reports/gender_confusion_matrix.png`,
+and `reports/age_error_by_bucket.png`. Model and dataset paths can be
+overridden with `--gender-model`, `--age-model`, and `--data-dir`.
+
 ## Configuration
 
 Update [config.py](config.py) to change image dimensions, confidence thresholds,
