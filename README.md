@@ -169,7 +169,9 @@ change the URL in the dashboard sidebar. The dashboard has Upload and Analyze,
 Live Camera, Register Person, and Logs and Stats pages.
 
 The API provides `GET /health`, `POST /analyze`, `POST /register`,
-`GET /people`, `DELETE /people/{person_id}`, `GET /logs`, and `GET /stats`.
+`POST /attendance`, `GET /people`, `DELETE /people/{person_id}`, `GET /logs`,
+and `GET /stats`. Registration and attendance require a live frame sequence;
+photo and screen spoof attempts are rejected.
 Recognition events are stored in SQLite when `/analyze` identifies faces.
 `/logs` accepts optional `date_from`, `date_to`, and `person_id` filters;
 `/stats` returns counts grouped by gender, age group, and day. Image uploads must be JPEG,

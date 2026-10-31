@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 import config
 from app.core.embedder import FaceEmbedder
+from app.core.liveness import LivenessChecker
 from app.services.matcher import FaceMatcher
 from app.services.logs import RecognitionLogService
 from app.services.pipeline import FacePipeline
@@ -73,6 +74,7 @@ class Services:
     registry: FaceRegistry
     pipeline: FacePipeline
     logs: RecognitionLogService | Any | None = None
+    liveness: LivenessChecker | Any | None = None
 
 
 app = FastAPI(title="FaceSense AI API", version="1.0.0")
@@ -106,6 +108,7 @@ def get_services() -> Services:
             registry=registry,
             pipeline=pipeline,
             logs=RecognitionLogService(engine=registry.engine),
+            liveness=LivenessChecker(),
         )
         return _services
     except (FileNotFoundError, ImportError, RuntimeError) as error:
@@ -202,11 +205,50 @@ async def register(
         raise HTTPException(status_code=422, detail="Registration requires 3 to 5 photos.")
     services = get_services()
     images = [await read_image_upload(photo) for photo in photos]
+    if services.liveness is not None:
+        liveness = services.liveness.check(images)
+        if not liveness["live"]:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Registration blocked: spoof detected (score {liveness['score']:.2f}).",
+            )
     try:
         person = services.registry.add(name, person_id, images)
     except (ValueError, KeyError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return PersonResponse(id=person["id"], name=person["name"])
+
+
+@app.post("/attendance", response_model=AnalyzeResponse)
+async def attendance(
+    frames: Annotated[list[UploadFile], File(description="Short liveness frame sequence")],
+) -> AnalyzeResponse:
+    if not 2 <= len(frames) <= 10:
+        raise HTTPException(status_code=422, detail="Attendance requires 2 to 10 frames.")
+    services = get_services()
+    images = [await read_image_upload(frame) for frame in frames]
+    if services.liveness is not None:
+        liveness = services.liveness.check(images)
+        if not liveness["live"]:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attendance blocked: spoof detected (score {liveness['score']:.2f}).",
+            )
+    try:
+        results = services.pipeline.analyze(images[-1])
+    except (ValueError, RuntimeError) as error:
+        raise HTTPException(status_code=422, detail=f"Could not analyze attendance: {error}") from error
+    for result in results:
+        if services.logs is not None:
+            services.logs.log(
+                person_id=result.get("person_id"),
+                event_time=None,
+                gender=result["gender"],
+                age=result["age"],
+                confidence=result["match_score"],
+                source="attendance",
+            )
+    return AnalyzeResponse(faces=results)
 
 
 @app.get("/people", response_model=list[PersonResponse])

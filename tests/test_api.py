@@ -52,6 +52,11 @@ class FakeRegistry:
         del self.people[person_id]
 
 
+class SpoofLiveness:
+    def check(self, frames: list[np.ndarray]) -> dict[str, object]:
+        return {"live": False, "status": "spoof", "score": 0.1}
+
+
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     services = main.Services(registry=FakeRegistry(), pipeline=FakePipeline())
@@ -128,6 +133,41 @@ def test_oversized_image_upload_returns_payload_too_large(
 
     assert response.status_code == 413
     assert response.json()["detail"] == "Image exceeds the 1 MB limit."
+
+
+def test_registration_and_attendance_block_spoof_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    services = main.Services(
+        registry=FakeRegistry(),
+        pipeline=FakePipeline(),
+        liveness=SpoofLiveness(),
+    )
+    monkeypatch.setattr(main, "_services", services)
+    monkeypatch.setattr(main, "_startup_error", None)
+    client = TestClient(main.app)
+    photos = [
+        ("photos", (f"face-{index}.jpg", image_bytes(), "image/jpeg"))
+        for index in range(3)
+    ]
+
+    registration = client.post(
+        "/register",
+        data={"name": "Priya", "person_id": "person-2"},
+        files=photos,
+    )
+    attendance = client.post(
+        "/attendance",
+        files=[
+            ("frames", (f"frame-{index}.jpg", image_bytes(), "image/jpeg"))
+            for index in range(2)
+        ],
+    )
+
+    assert registration.status_code == 422
+    assert "spoof detected" in registration.json()["detail"]
+    assert attendance.status_code == 422
+    assert "spoof detected" in attendance.json()["detail"]
 
 
 def test_logs_and_stats_endpoints_support_filters(
