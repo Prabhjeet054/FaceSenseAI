@@ -35,6 +35,6 @@ GENDER_MODEL_PATH = MODELS_DIR / "gender.h5"
 GENDER_MODEL_NAME = "gender_classifier"
 AGE_MODEL_PATH = MODELS_DIR / "age.h5"
 AGE_MODEL_NAME = "age_estimator"
-AGE_VALIDATION_MAE_THRESHOLD = 10.0
+AGE_VALIDATION_MAE_LIMIT = 10.0
 EMOTION_MODEL_NAME = "emotion_classifier"
 LIVENESS_MODEL_NAME = "liveness_detector"

@@ -60,7 +60,7 @@ def test_saved_age_model_mae_on_validation_samples() -> None:
     predictions = tf.squeeze(model.predict(images, verbose=0), axis=-1)
     mae = float(tf.reduce_mean(tf.abs(predictions - expected_ages)).numpy())
 
-    assert mae < config.AGE_VALIDATION_MAE_THRESHOLD, (
+    assert mae < config.AGE_VALIDATION_MAE_LIMIT, (
         f"Validation MAE {mae:.2f} exceeds configured threshold "
-        f"{config.AGE_VALIDATION_MAE_THRESHOLD:.2f}"
+        f"{config.AGE_VALIDATION_MAE_LIMIT:.2f}"
     )
