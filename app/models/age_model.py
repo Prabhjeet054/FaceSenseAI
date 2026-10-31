@@ -40,6 +40,7 @@ def build_model(
         input_shape=input_shape,
         include_top=False,
         weights=weights,
+        name="mobilenetv2_backbone",
     )
     backbone.trainable = False
 

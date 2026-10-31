@@ -110,6 +110,19 @@ best checkpoint to `models/gender.h5`; accuracy and loss curves are saved to
 `--batch-size`, `--patience`, and `--seed` can be overridden from the command
 line.
 
+## Training the age model
+
+Train the regression head first, then fine-tune the top 30 MobileNetV2 layers:
+
+```bash
+python3 train_age.py
+```
+
+Validation MAE is printed after every epoch. A `ReduceLROnPlateau` scheduler
+is used in both phases, and the best checkpoint is saved to
+`models/age.h5`. Override `--head-epochs`, `--fine-tune-epochs`,
+`--batch-size`, or `--fine-tune-learning-rate` as needed.
+
 ## Configuration
 
 Update [config.py](config.py) to change image dimensions, confidence thresholds,

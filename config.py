@@ -32,5 +32,6 @@ FACE_NMS_THRESHOLD = 0.30
 FACE_RECOGNITION_MODEL_NAME = "face_recognition"
 GENDER_MODEL_NAME = "gender_classifier"
 AGE_MODEL_NAME = "age_estimator"
+AGE_VALIDATION_MAE_THRESHOLD = 10.0
 EMOTION_MODEL_NAME = "emotion_classifier"
 LIVENESS_MODEL_NAME = "liveness_detector"
