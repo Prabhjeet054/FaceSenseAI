@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+import altair as alt
 
 from app.utils.draw import draw_faces
 
@@ -68,6 +69,79 @@ def analyze_image(data: bytes, filename: str) -> tuple[np.ndarray, list[dict[str
     payload = {"image": (filename, data, "image/jpeg")}
     result = backend_request("POST", "/analyze", files=payload)
     return image, result["faces"]
+
+
+def date_filter_params(date_from: Any, date_to: Any, person_id: str = "") -> dict[str, str]:
+    return {
+        key: str(value)
+        for key, value in {
+            "date_from": date_from,
+            "date_to": date_to,
+            "person_id": person_id.strip(),
+        }.items()
+        if value
+    }
+
+
+def build_gender_chart(log_table: pd.DataFrame) -> alt.Chart:
+    """Build a gender distribution pie chart from recognition logs."""
+    counts = (
+        log_table["gender"]
+        .value_counts()
+        .rename_axis("gender")
+        .reset_index(name="count")
+    )
+    return (
+        alt.Chart(counts)
+        .mark_arc()
+        .encode(
+            theta=alt.Theta("count:Q"),
+            color=alt.Color("gender:N"),
+            tooltip=["gender:N", "count:Q"],
+        )
+    )
+
+
+def build_age_group_chart(log_table: pd.DataFrame) -> alt.Chart:
+    """Build an age-group count bar chart from recognition logs."""
+    counts = (
+        log_table["age_group"]
+        .value_counts()
+        .rename_axis("age_group")
+        .reset_index(name="count")
+    )
+    return (
+        alt.Chart(counts)
+        .mark_bar()
+        .encode(
+            x=alt.X("age_group:N", sort="-y"),
+            y=alt.Y("count:Q"),
+            tooltip=["age_group:N", "count:Q"],
+        )
+    )
+
+
+def build_hourly_chart(log_table: pd.DataFrame) -> alt.Chart:
+    """Build a 24-point detections-per-hour line chart."""
+    timestamps = pd.to_datetime(log_table["time"], errors="coerce", utc=True)
+    if timestamps.isna().any():
+        raise ValueError("recognition logs contain an invalid time")
+    counts = (
+        timestamps.dt.hour.value_counts()
+        .reindex(range(24), fill_value=0)
+        .rename_axis("hour")
+        .reset_index(name="count")
+    )
+    counts["hour"] = counts["hour"].map(lambda hour: f"{hour:02d}:00")
+    return (
+        alt.Chart(counts)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("hour:N", sort=None),
+            y=alt.Y("count:Q"),
+            tooltip=["hour:N", "count:Q"],
+        )
+    )
 
 
 def show_analysis(image: np.ndarray, results: list[dict[str, Any]]) -> None:
@@ -155,15 +229,7 @@ def logs_and_stats_page() -> None:
         date_to = st.date_input("To date", value=None)
     with person:
         person_id = st.text_input("Person ID filter")
-    params = {
-        key: str(value)
-        for key, value in {
-            "date_from": date_from,
-            "date_to": date_to,
-            "person_id": person_id.strip(),
-        }.items()
-        if value
-    }
+    params = date_filter_params(date_from, date_to, person_id)
     if st.button("Refresh logs", type="primary"):
         try:
             logs = backend_request("GET", "/logs", params=params)
@@ -181,6 +247,57 @@ def logs_and_stats_page() -> None:
             st.error(str(error))
 
 
+def dashboard_page() -> None:
+    st.header("Dashboard")
+    first, last = st.columns(2)
+    with first:
+        date_from = st.date_input("From date", value=None, key="dashboard_date_from")
+    with last:
+        date_to = st.date_input("To date", value=None, key="dashboard_date_to")
+    params = date_filter_params(date_from, date_to)
+
+    if st.button("Refresh dashboard", type="primary"):
+        try:
+            logs = backend_request("GET", "/logs", params=params)
+            stats = backend_request("GET", "/stats", params=params)
+            log_table = pd.DataFrame(logs)
+
+            if log_table.empty:
+                st.info("No recognition events found for the selected date range.")
+                return
+
+            st.subheader("Gender distribution")
+            st.altair_chart(
+                build_gender_chart(log_table),
+                use_container_width=True,
+            )
+
+            st.subheader("Age-group distribution")
+            st.altair_chart(
+                build_age_group_chart(log_table),
+                use_container_width=True,
+            )
+
+            st.subheader("Detections per hour")
+            st.altair_chart(
+                build_hourly_chart(log_table),
+                use_container_width=True,
+            )
+
+            st.subheader("Most recent detections")
+            recent = log_table.head(10)
+            st.dataframe(recent, hide_index=True, use_container_width=True)
+            st.download_button(
+                "Download detections CSV",
+                data=log_table.to_csv(index=False).encode("utf-8"),
+                file_name="facesense_detections.csv",
+                mime="text/csv",
+            )
+            st.caption(f"{stats['total']} detections in the selected range.")
+        except (RuntimeError, KeyError, ValueError) as error:
+            st.error(str(error))
+
+
 def main() -> None:
     st.set_page_config(page_title="FaceSense AI", page_icon="🙂", layout="wide")
     if "api_url" not in st.session_state:
@@ -193,13 +310,16 @@ def main() -> None:
         page = st.radio(
             "Navigate",
             [
+                "Dashboard",
                 "Upload and Analyze",
                 "Live Camera",
                 "Register Person",
                 "Logs and Stats",
             ],
         )
-    if page == "Upload and Analyze":
+    if page == "Dashboard":
+        dashboard_page()
+    elif page == "Upload and Analyze":
         upload_and_analyze_page()
     elif page == "Live Camera":
         live_camera_page()
