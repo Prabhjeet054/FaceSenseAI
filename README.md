@@ -32,17 +32,25 @@ FaceSenseAI/
 
 ## Getting started
 
-1. Create and activate a virtual environment:
+1. Install Python 3.11, then create and activate a virtual environment in
+   **Command Prompt**:
 
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate
+   py -3.11 -m venv .venv
+   .venv\Scripts\activate
    ```
 
-2. Install dependencies:
+   In **PowerShell**, activate it with:
 
    ```bash
-   pip install -r requirements.txt
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+2. Upgrade pip and install the pinned dependencies:
+
+   ```bash
+   python -m pip install --upgrade pip
+   python -m pip install -r requirements.txt
    ```
 
 3. Add registered face images to `data/known_faces/`.
@@ -56,4 +64,3 @@ FaceSenseAI/
 Update [config.py](config.py) to change image dimensions, confidence thresholds,
 attendance deduplication behavior, or model identifiers. Paths are resolved
 relative to the project root.
-
