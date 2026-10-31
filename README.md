@@ -157,6 +157,16 @@ in `models/`, start the FastAPI server with:
 python3 -m uvicorn app.api.main:app --reload
 ```
 
+In another terminal, start the Streamlit dashboard:
+
+```bash
+python3 -m streamlit run ui/app.py
+```
+
+Set `FACESENSE_API_URL` to point the dashboard at a different backend, or
+change the URL in the dashboard sidebar. The dashboard has Upload and Analyze,
+Live Camera, Register Person, and Logs and Stats pages.
+
 The API provides `GET /health`, `POST /analyze`, `POST /register`,
 `GET /people`, `DELETE /people/{person_id}`, `GET /logs`, and `GET /stats`.
 Recognition events are stored in SQLite when `/analyze` identifies faces.
