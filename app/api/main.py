@@ -32,6 +32,8 @@ class FaceResult(BaseModel):
     gender_confidence: float
     age: float
     age_group: str
+    emotion: str
+    emotion_confidence: float
 
 
 class AnalyzeResponse(BaseModel):

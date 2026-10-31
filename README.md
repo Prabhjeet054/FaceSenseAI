@@ -4,6 +4,7 @@ FaceSense AI is an end-to-end computer vision system for:
 
 - Face detection and recognition of registered people
 - Gender classification and approximate age estimation
+- Seven-class facial emotion classification
 - Emotion detection and liveness checks
 - Attendance logging
 - Dashboard and API integrations

@@ -12,6 +12,8 @@ EXPECTED_KEYS = {
     "gender_confidence",
     "age",
     "age_group",
+    "emotion",
+    "emotion_confidence",
 }
 
 
@@ -51,6 +53,12 @@ class FixedModel:
         return np.full((len(batch), 1), self.value, dtype=np.float32)
 
 
+class FixedEmotionModel:
+    def predict(self, face: np.ndarray) -> dict[str, object]:
+        assert face.ndim == 3
+        return {"emotion": "happy", "emotion_confidence": 0.91}
+
+
 def make_pipeline() -> FacePipeline:
     return FacePipeline(
         detector=GroupDetector(),
@@ -58,6 +66,7 @@ def make_pipeline() -> FacePipeline:
         matcher=FixedMatcher(),
         gender_model=FixedModel(0.75),
         age_model=FixedModel(25.0),
+        emotion_model=FixedEmotionModel(),
     )
 
 
@@ -72,6 +81,8 @@ def test_group_photo_results_have_schema_and_valid_confidences() -> None:
         assert set(result) == EXPECTED_KEYS
         assert 0 <= result["match_score"] <= 1
         assert 0 <= result["gender_confidence"] <= 1
+        assert result["emotion"] == "happy"
+        assert 0 <= result["emotion_confidence"] <= 1
 
 
 def test_image_with_no_faces_returns_empty_list() -> None:

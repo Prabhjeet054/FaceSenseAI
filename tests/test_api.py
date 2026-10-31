@@ -25,6 +25,8 @@ class FakePipeline:
                 "gender_confidence": 0.94,
                 "age": 27.0,
                 "age_group": "young adult",
+                "emotion": "happy",
+                "emotion_confidence": 0.91,
             }
         ]
 

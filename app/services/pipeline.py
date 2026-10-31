@@ -13,6 +13,7 @@ from app.core.detector import FaceDetector
 from app.core.embedder import FaceEmbedder
 from app.core.preprocess import preprocess_face
 from app.models.age_model import predict_age_group
+from app.models.emotion import EmotionClassifier
 from app.services.matcher import FaceMatcher
 from app.services.registry import FaceRegistry
 
@@ -27,6 +28,7 @@ class FacePipeline:
         matcher: FaceMatcher | Any | None = None,
         gender_model: Any | None = None,
         age_model: Any | None = None,
+        emotion_model: Any | None = None,
         gender_model_path: str | Path = config.GENDER_MODEL_PATH,
         age_model_path: str | Path = config.AGE_MODEL_PATH,
     ) -> None:
@@ -41,6 +43,7 @@ class FacePipeline:
         self.matcher = matcher
         self.gender_model = gender_model or self._load_model(gender_model_path)
         self.age_model = age_model or self._load_model(age_model_path)
+        self.emotion_model = emotion_model or EmotionClassifier()
 
     def analyze(self, image: np.ndarray) -> list[dict[str, Any]]:
         """Analyze all detected faces that meet the configured minimum size."""
@@ -71,6 +74,8 @@ class FacePipeline:
             age = float(
                 np.asarray(self.age_model.predict(batch, verbose=0)).reshape(-1)[0]
             )
+            face_crop = self._crop_face(image, bbox)
+            emotion = self.emotion_model.predict(face_crop)
             gender = "female" if gender_probability >= 0.5 else "male"
             results.append(
                 {
@@ -84,6 +89,8 @@ class FacePipeline:
                     ),
                     "age": age,
                     "age_group": predict_age_group(age),
+                    "emotion": emotion["emotion"],
+                    "emotion_confidence": float(emotion["emotion_confidence"]),
                 }
             )
         return results
@@ -103,6 +110,18 @@ class FacePipeline:
             raise ValueError("detector bounding boxes must contain four values")
         _, _, width, height = (float(value) for value in bbox)
         return width >= config.FACE_MIN_SIZE and height >= config.FACE_MIN_SIZE
+
+    @staticmethod
+    def _crop_face(image: np.ndarray, bbox: Any) -> np.ndarray:
+        x, y, width, height = (int(round(float(value))) for value in bbox)
+        image_height, image_width = image.shape[:2]
+        left = max(0, x)
+        top = max(0, y)
+        right = min(image_width, x + width)
+        bottom = min(image_height, y + height)
+        if right <= left or bottom <= top:
+            raise ValueError("face bounding box does not overlap the image")
+        return image[top:bottom, left:right]
 
 
 __all__ = ["FacePipeline"]

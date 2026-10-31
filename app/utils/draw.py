@@ -91,7 +91,12 @@ def _format_label(result: Mapping[str, object]) -> str:
     gender = str(result.get("gender", "unknown")).capitalize()
     confidence = float(result.get("gender_confidence", 0.0)) * 100
     age = float(result.get("age", 0.0))
-    return f"{name} | {gender} ({confidence:.0f}%) | Age ~{age:.0f}"
+    emotion = str(result.get("emotion", "unknown")).capitalize()
+    emotion_confidence = float(result.get("emotion_confidence", 0.0)) * 100
+    return (
+        f"{name} | {gender} ({confidence:.0f}%) | Age ~{age:.0f} | "
+        f"{emotion} ({emotion_confidence:.0f}%)"
+    )
 
 
 def _color_for_result(result: Mapping[str, object]) -> tuple[int, int, int]:
