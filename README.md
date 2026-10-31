@@ -95,6 +95,21 @@ creates stratified 70/15/15 train, validation, and test splits under
 `data/processed/`, and writes `data/processed/labels.csv`. Use
 `--input-dir`, `--output-dir`, or `--random-state` to customize the defaults.
 
+## Training the gender model
+
+After preparing the dataset, train the CNN with:
+
+```bash
+python3 train_gender.py
+```
+
+The script applies horizontal flips, small rotations, and brightness
+augmentation to the training split only. It uses early stopping and saves the
+best checkpoint to `models/gender.h5`; accuracy and loss curves are saved to
+`models/gender_training_curves.png`. Training options such as `--epochs`,
+`--batch-size`, `--patience`, and `--seed` can be overridden from the command
+line.
+
 ## Configuration
 
 Update [config.py](config.py) to change image dimensions, confidence thresholds,
