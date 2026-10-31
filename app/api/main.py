@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -11,11 +12,13 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
 import config
 from app.core.embedder import FaceEmbedder
 from app.core.liveness import LivenessChecker
+from app.services.attendance import AttendanceService
 from app.services.matcher import FaceMatcher
 from app.services.logs import RecognitionLogService
 from app.services.pipeline import FacePipeline
@@ -69,12 +72,21 @@ class StatsResponse(BaseModel):
     by_day: dict[str, int]
 
 
+class AttendanceResponse(BaseModel):
+    id: int
+    person_id: str
+    date: str
+    time: str
+    source: str
+
+
 @dataclass
 class Services:
     registry: FaceRegistry
     pipeline: FacePipeline
     logs: RecognitionLogService | Any | None = None
     liveness: LivenessChecker | Any | None = None
+    attendance: AttendanceService | Any | None = None
 
 
 app = FastAPI(title="FaceSense AI API", version="1.0.0")
@@ -109,6 +121,7 @@ def get_services() -> Services:
             pipeline=pipeline,
             logs=RecognitionLogService(engine=registry.engine),
             liveness=LivenessChecker(),
+            attendance=AttendanceService(engine=registry.engine),
         )
         return _services
     except (FileNotFoundError, ImportError, RuntimeError) as error:
@@ -248,7 +261,34 @@ async def attendance(
                 confidence=result["match_score"],
                 source="attendance",
             )
+        if services.attendance is not None and result.get("person_id"):
+            services.attendance.mark_present(
+                person_id=result["person_id"],
+                source="attendance",
+            )
     return AnalyzeResponse(faces=results)
+
+
+@app.get("/attendance", response_model=list[AttendanceResponse])
+def list_attendance(attendance_date: date | None = None) -> list[AttendanceResponse]:
+    services = get_services()
+    if services.attendance is None:
+        raise HTTPException(status_code=503, detail="Attendance service is unavailable.")
+    return services.attendance.list_for_day(attendance_date)
+
+
+@app.get("/attendance/export")
+def export_attendance(attendance_date: date | None = None) -> StreamingResponse:
+    services = get_services()
+    if services.attendance is None:
+        raise HTTPException(status_code=503, detail="Attendance service is unavailable.")
+    day = attendance_date or date.today()
+    workbook = services.attendance.export_excel(day)
+    return StreamingResponse(
+        BytesIO(workbook),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="attendance-{day.isoformat()}.xlsx"'},
+    )
 
 
 @app.get("/people", response_model=list[PersonResponse])

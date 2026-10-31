@@ -179,6 +179,12 @@ PNG, or WebP files no larger than 10 MB. Registration accepts three to five
 photos as multipart form data using the `name`, `person_id`, and `photos`
 fields.
 
+Daily attendance is available at `GET /attendance?attendance_date=YYYY-MM-DD`
+and can be downloaded as an Excel workbook from
+`GET /attendance/export?attendance_date=YYYY-MM-DD`. A person is marked once
+per day on their first successful live recognition; repeats within the configured
+cooldown are ignored.
+
 ## Configuration
 
 Update [config.py](config.py) to change image dimensions, confidence thresholds,

@@ -247,6 +247,23 @@ def logs_and_stats_page() -> None:
             st.error(str(error))
 
 
+def attendance_page() -> None:
+    st.header("Daily Attendance")
+    attendance_date = st.date_input("Attendance date", value=None, key="attendance_date")
+    if st.button("Refresh attendance", type="primary"):
+        params = {"attendance_date": str(attendance_date)} if attendance_date else {}
+        try:
+            records = backend_request("GET", "/attendance", params=params)
+            table = pd.DataFrame(records)
+            st.dataframe(table, hide_index=True, use_container_width=True)
+            export_url = api_url("/attendance/export")
+            if params:
+                export_url = f"{export_url}?attendance_date={attendance_date}"
+            st.link_button("Download Excel attendance sheet", export_url)
+        except (RuntimeError, KeyError) as error:
+            st.error(str(error))
+
+
 def dashboard_page() -> None:
     st.header("Dashboard")
     first, last = st.columns(2)
@@ -311,6 +328,7 @@ def main() -> None:
             "Navigate",
             [
                 "Dashboard",
+                "Daily Attendance",
                 "Upload and Analyze",
                 "Live Camera",
                 "Register Person",
@@ -319,6 +337,8 @@ def main() -> None:
         )
     if page == "Dashboard":
         dashboard_page()
+    elif page == "Daily Attendance":
+        attendance_page()
     elif page == "Upload and Analyze":
         upload_and_analyze_page()
     elif page == "Live Camera":

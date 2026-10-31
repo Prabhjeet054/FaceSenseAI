@@ -27,6 +27,7 @@ def run_page(page: str) -> AppTest:
     "page",
     [
         "Dashboard",
+        "Daily Attendance",
         "Upload and Analyze",
         "Live Camera",
         "Register Person",
