@@ -1,0 +1,165 @@
+"""FastAPI application for FaceSense AI."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Annotated, Any
+
+import cv2
+import numpy as np
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, ConfigDict
+
+import config
+from app.core.embedder import FaceEmbedder
+from app.services.matcher import FaceMatcher
+from app.services.pipeline import FacePipeline
+from app.services.registry import FaceRegistry
+
+
+class FaceResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    box: list[float]
+    name: str
+    match_score: float
+    gender: str
+    gender_confidence: float
+    age: float
+    age_group: str
+
+
+class AnalyzeResponse(BaseModel):
+    faces: list[FaceResult]
+
+
+class PersonResponse(BaseModel):
+    id: str
+    name: str
+
+
+class HealthResponse(BaseModel):
+    status: str
+    models_loaded: bool
+
+
+@dataclass
+class Services:
+    registry: FaceRegistry
+    pipeline: FacePipeline
+
+
+app = FastAPI(title="FaceSense AI API", version="1.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+_services: Services | None = None
+_startup_error: str | None = None
+
+
+def get_services() -> Services:
+    """Load shared models and services once on first model-dependent request."""
+    global _services, _startup_error
+    if _services is not None:
+        return _services
+    if _startup_error is not None:
+        raise HTTPException(status_code=503, detail=_startup_error)
+    try:
+        embedder = FaceEmbedder()
+        registry = FaceRegistry(embedder=embedder)
+        pipeline = FacePipeline(
+            detector=registry.detector,
+            embedder=embedder,
+            matcher=FaceMatcher(registry),
+        )
+        _services = Services(registry=registry, pipeline=pipeline)
+        return _services
+    except (FileNotFoundError, ImportError, RuntimeError) as error:
+        _startup_error = f"FaceSense AI services are unavailable: {error}"
+        raise HTTPException(status_code=503, detail=_startup_error) from error
+
+
+async def read_image_upload(upload: UploadFile) -> np.ndarray:
+    """Validate and decode an uploaded image."""
+    content_type = upload.content_type or ""
+    suffix = Path(upload.filename or "").suffix.lower()
+    if content_type not in config.API_ALLOWED_IMAGE_TYPES or suffix not in {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported image type. Upload a JPEG, PNG, or WebP image.",
+        )
+    data = await upload.read(config.API_MAX_IMAGE_SIZE_BYTES + 1)
+    if len(data) > config.API_MAX_IMAGE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Image exceeds the {config.API_MAX_IMAGE_SIZE_BYTES // (1024 * 1024)} MB limit.",
+        )
+    image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None or image.size == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image.")
+    return image
+
+
+@app.post("/analyze", response_model=AnalyzeResponse)
+async def analyze(
+    image: Annotated[UploadFile, File(description="JPEG, PNG, or WebP image")],
+) -> AnalyzeResponse:
+    services = get_services()
+    image_array = await read_image_upload(image)
+    try:
+        results = services.pipeline.analyze(image_array)
+    except (ValueError, RuntimeError) as error:
+        raise HTTPException(status_code=422, detail=f"Could not analyze image: {error}") from error
+    return AnalyzeResponse(faces=results)
+
+
+@app.post("/register", response_model=PersonResponse, status_code=201)
+async def register(
+    name: Annotated[str, Form(min_length=1)],
+    person_id: Annotated[str, Form(min_length=1)],
+    photos: Annotated[list[UploadFile], File(description="Three to five face photos")],
+) -> PersonResponse:
+    if not 3 <= len(photos) <= 5:
+        raise HTTPException(status_code=422, detail="Registration requires 3 to 5 photos.")
+    services = get_services()
+    images = [await read_image_upload(photo) for photo in photos]
+    try:
+        person = services.registry.add(name, person_id, images)
+    except (ValueError, KeyError) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return PersonResponse(id=person["id"], name=person["name"])
+
+
+@app.get("/people", response_model=list[PersonResponse])
+def list_people() -> list[PersonResponse]:
+    services = get_services()
+    return [
+        PersonResponse(id=person["id"], name=person["name"])
+        for person in services.registry.list()
+    ]
+
+
+@app.delete("/people/{person_id}", status_code=204)
+def delete_person(person_id: str) -> Response:
+    services = get_services()
+    try:
+        services.registry.delete(person_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return Response(status_code=204)
+
+
+@app.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    return HealthResponse(status="ok", models_loaded=_services is not None)

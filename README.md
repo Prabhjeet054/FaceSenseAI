@@ -148,6 +148,21 @@ python3 process_video.py input.mp4 \
 
 The CSV contains `timestamp`, `name`, `gender`, and `age` for every detection.
 
+## Running the API
+
+After installing the pinned dependencies and placing the trained model files
+in `models/`, start the FastAPI server with:
+
+```bash
+python3 -m uvicorn app.api.main:app --reload
+```
+
+The API provides `GET /health`, `POST /analyze`, `POST /register`,
+`GET /people`, and `DELETE /people/{person_id}`. Image uploads must be JPEG,
+PNG, or WebP files no larger than 10 MB. Registration accepts three to five
+photos as multipart form data using the `name`, `person_id`, and `photos`
+fields.
+
 ## Configuration
 
 Update [config.py](config.py) to change image dimensions, confidence thresholds,
