@@ -32,6 +32,7 @@ FACE_NMS_THRESHOLD = 0.30
 FACE_MIN_SIZE = 40
 API_MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
 API_ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+LOG_RETENTION_DAYS = 90
 FACE_RECOGNITION_MODEL_NAME = "face_recognition"
 GENDER_MODEL_PATH = MODELS_DIR / "gender.h5"
 GENDER_MODEL_NAME = "gender_classifier"

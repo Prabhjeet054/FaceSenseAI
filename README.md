@@ -151,6 +151,25 @@ The CSV contains `timestamp`, `name`, `gender`, and `age` for every detection.
 
 ## Running the API
 
+Set both privacy-related environment variables before starting the API. The
+API fails closed if either key is missing. Generate a Fernet-compatible
+encryption key with:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Then configure the values in the shell that starts Uvicorn:
+
+```bash
+export FACESENSE_API_KEY="replace-with-a-long-random-api-key"
+export FACESENSE_ENCRYPTION_KEY="replace-with-the-generated-fernet-key"
+```
+
+On Windows PowerShell, use `$env:FACESENSE_API_KEY = "..."` and
+`$env:FACESENSE_ENCRYPTION_KEY = "..."` instead. Keep the encryption key
+stable; changing it makes previously stored embeddings unavailable.
+
 After installing the pinned dependencies and placing the trained model files
 in `models/`, start the FastAPI server with:
 
@@ -184,6 +203,13 @@ and can be downloaded as an Excel workbook from
 `GET /attendance/export?attendance_date=YYYY-MM-DD`. A person is marked once
 per day on their first successful live recognition; repeats within the configured
 cooldown are ignored.
+
+Registration requires an explicit consent checkbox in the UI and stores the
+consent timestamp with the registered person. All API routes require the
+`X-API-Key` header. Recognition logs are automatically deleted after
+`config.LOG_RETENTION_DAYS` days. Use
+`DELETE /people/{person_id}/data` to delete a person's registration,
+recognition logs, and attendance records.
 
 ## Configuration
 

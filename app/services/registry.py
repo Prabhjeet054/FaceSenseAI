@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime, timezone
+import os
 from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
-from sqlalchemy import DateTime, LargeBinary, String, create_engine, select
+from cryptography.fernet import Fernet, InvalidToken
+from sqlalchemy import Boolean, DateTime, LargeBinary, String, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.sql import func
 
@@ -34,6 +37,8 @@ class RegisteredPerson(Base):
     person_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    consent_given: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    consent_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[Any] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -61,14 +66,24 @@ class FaceRegistry:
         self.engine = create_engine(database_url)
         Base.metadata.create_all(self.engine)
         self.session_factory = sessionmaker(self.engine, expire_on_commit=False)
+        key = os.getenv("FACESENSE_ENCRYPTION_KEY")
+        self._fernet = Fernet(key.encode() if key else Fernet.generate_key())
         self.detector = detector or FaceDetector()
         self.embedder = embedder or FaceEmbedder()
 
     def add(
-        self, name: str, person_id: str, photos: Sequence[str | Path | np.ndarray]
+        self,
+        name: str,
+        person_id: str,
+        photos: Sequence[str | Path | np.ndarray],
+        consent: bool = True,
+        consent_at: Any | None = None,
     ) -> dict[str, Any]:
         """Register a person from three to five photos."""
         self._validate_identity(name, person_id)
+        if not consent:
+            raise ValueError("consent is required for registration")
+        consent_at = consent_at or datetime.now(timezone.utc)
         embeddings = self._extract_embeddings(photos)
         with self.session_factory.begin() as session:
             if session.get(RegisteredPerson, person_id) is not None:
@@ -77,6 +92,8 @@ class FaceRegistry:
                 person_id=person_id,
                 name=name.strip(),
                 embedding=self._serialize_embedding(self._average(embeddings)),
+                consent_given=consent,
+                consent_at=consent_at,
             )
             session.add(record)
         return self._record_to_dict(record)
@@ -171,19 +188,33 @@ class FaceRegistry:
             raise ValueError("Cannot store an invalid average embedding")
         return (average / norm).astype(np.float32)
 
-    @staticmethod
-    def _serialize_embedding(embedding: np.ndarray) -> bytes:
-        return embedding.tobytes()
+    def _serialize_embedding(self, embedding: np.ndarray) -> bytes:
+        return self._fernet.encrypt(embedding.tobytes())
 
-    @staticmethod
-    def _record_to_dict(record: RegisteredPerson) -> dict[str, Any]:
-        embedding = np.frombuffer(record.embedding, dtype=np.float32).copy()
+    def decrypt_embedding(self, encrypted_embedding: bytes) -> np.ndarray:
+        """Decrypt a stored embedding and validate its shape."""
+        try:
+            raw_embedding = self._fernet.decrypt(encrypted_embedding)
+        except InvalidToken:
+            # Preserve compatibility with databases created before encryption.
+            raw_embedding = encrypted_embedding
+        embedding = np.frombuffer(raw_embedding, dtype=np.float32).copy()
+        if embedding.shape != (EMBEDDING_DIMENSION,):
+            raise ValueError(
+                f"Stored embedding has invalid shape {embedding.shape}"
+            )
+        return embedding
+
+    def _record_to_dict(self, record: RegisteredPerson) -> dict[str, Any]:
+        embedding = self.decrypt_embedding(record.embedding)
         return {
             "id": record.person_id,
             "name": record.name,
             "embedding": embedding.tolist(),
             "created_at": record.created_at,
             "updated_at": record.updated_at,
+            "consent_given": record.consent_given,
+            "consent_at": record.consent_at,
         }
 
     @staticmethod

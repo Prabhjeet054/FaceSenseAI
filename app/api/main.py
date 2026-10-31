@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Any
@@ -11,6 +11,7 @@ from typing import Annotated, Any
 import cv2
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
@@ -23,6 +24,7 @@ from app.services.matcher import FaceMatcher
 from app.services.logs import RecognitionLogService
 from app.services.pipeline import FacePipeline
 from app.services.registry import FaceRegistry
+import os
 
 
 class FaceResult(BaseModel):
@@ -89,7 +91,17 @@ class Services:
     attendance: AttendanceService | Any | None = None
 
 
-app = FastAPI(title="FaceSense AI API", version="1.0.0")
+def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
+    expected = os.getenv("FACESENSE_API_KEY")
+    if not expected or x_api_key != expected:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+
+app = FastAPI(
+    title="FaceSense AI API",
+    version="1.0.0",
+    dependencies=[Depends(require_api_key)],
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -109,6 +121,10 @@ def get_services() -> Services:
     if _startup_error is not None:
         raise HTTPException(status_code=503, detail=_startup_error)
     try:
+        if not os.getenv("FACESENSE_ENCRYPTION_KEY"):
+            raise RuntimeError(
+                "FACESENSE_ENCRYPTION_KEY must be configured before starting the API"
+            )
         embedder = FaceEmbedder()
         registry = FaceRegistry(embedder=embedder)
         pipeline = FacePipeline(
@@ -119,12 +135,15 @@ def get_services() -> Services:
         _services = Services(
             registry=registry,
             pipeline=pipeline,
-            logs=RecognitionLogService(engine=registry.engine),
+            logs=RecognitionLogService(
+                engine=registry.engine,
+                retention_days=config.LOG_RETENTION_DAYS,
+            ),
             liveness=LivenessChecker(),
             attendance=AttendanceService(engine=registry.engine),
         )
         return _services
-    except (FileNotFoundError, ImportError, RuntimeError) as error:
+    except (FileNotFoundError, ImportError, RuntimeError, ValueError) as error:
         _startup_error = f"FaceSense AI services are unavailable: {error}"
         raise HTTPException(status_code=503, detail=_startup_error) from error
 
@@ -212,10 +231,13 @@ def stats(
 async def register(
     name: Annotated[str, Form(min_length=1)],
     person_id: Annotated[str, Form(min_length=1)],
+    consent: Annotated[bool, Form()],
     photos: Annotated[list[UploadFile], File(description="Three to five face photos")],
 ) -> PersonResponse:
     if not 3 <= len(photos) <= 5:
         raise HTTPException(status_code=422, detail="Registration requires 3 to 5 photos.")
+    if not consent:
+        raise HTTPException(status_code=422, detail="Consent is required for registration.")
     services = get_services()
     images = [await read_image_upload(photo) for photo in photos]
     if services.liveness is not None:
@@ -226,7 +248,13 @@ async def register(
                 detail=f"Registration blocked: spoof detected (score {liveness['score']:.2f}).",
             )
     try:
-        person = services.registry.add(name, person_id, images)
+        person = services.registry.add(
+            name,
+            person_id,
+            images,
+            consent=consent,
+            consent_at=datetime.now(timezone.utc),
+        )
     except (ValueError, KeyError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return PersonResponse(id=person["id"], name=person["name"])
@@ -298,6 +326,27 @@ def list_people() -> list[PersonResponse]:
         PersonResponse(id=person["id"], name=person["name"])
         for person in services.registry.list()
     ]
+
+
+@app.delete("/people/{person_id}/data")
+def delete_my_data(person_id: str) -> dict[str, Any]:
+    services = get_services()
+    try:
+        services.registry.delete(person_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    deleted_logs = services.logs.delete_for_person(person_id) if services.logs else 0
+    deleted_attendance = (
+        services.attendance.delete_for_person(person_id)
+        if services.attendance
+        else 0
+    )
+    return {
+        "deleted": True,
+        "person_id": person_id,
+        "deleted_logs": deleted_logs,
+        "deleted_attendance": deleted_attendance,
+    }
 
 
 @app.delete("/people/{person_id}", status_code=204)

@@ -7,7 +7,7 @@ from io import BytesIO
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import DateTime, Integer, String, UniqueConstraint, create_engine, select
+from sqlalchemy import DateTime, Integer, String, UniqueConstraint, create_engine, delete, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -106,6 +106,13 @@ class AttendanceService:
         ).order_by(AttendanceRecord.marked_at)
         with Session(self.engine) as session:
             return [self._to_dict(record) for record in session.scalars(statement)]
+
+    def delete_for_person(self, person_id: str) -> int:
+        with self.session_factory.begin() as session:
+            result = session.execute(
+                delete(AttendanceRecord).where(AttendanceRecord.person_id == person_id)
+            )
+            return int(result.rowcount or 0)
 
     def export_excel(self, attendance_date: date | None = None) -> bytes:
         rows = self.list_for_day(attendance_date)

@@ -36,7 +36,11 @@ class FakeRegistry:
         self.people = {"person-1": {"id": "person-1", "name": "Rahul"}}
 
     def add(
-        self, name: str, person_id: str, photos: list[np.ndarray]
+        self,
+        name: str,
+        person_id: str,
+        photos: list[np.ndarray],
+        **kwargs: object,
     ) -> dict[str, str]:
         assert len(photos) == 3
         person = {"id": person_id, "name": name}
@@ -59,10 +63,11 @@ class SpoofLiveness:
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.setenv("FACESENSE_API_KEY", "test-api-key")
     services = main.Services(registry=FakeRegistry(), pipeline=FakePipeline())
     monkeypatch.setattr(main, "_services", services)
     monkeypatch.setattr(main, "_startup_error", None)
-    return TestClient(main.app)
+    return TestClient(main.app, headers={"X-API-Key": "test-api-key"})
 
 
 def image_bytes() -> bytes:
@@ -94,7 +99,7 @@ def test_api_endpoints_and_upload_validation(client: TestClient) -> None:
     ]
     register_response = client.post(
         "/register",
-        data={"name": "Priya", "person_id": "person-2"},
+        data={"name": "Priya", "person_id": "person-2", "consent": "true"},
         files=register_files,
     )
     assert register_response.status_code == 201
@@ -124,6 +129,31 @@ def test_text_file_upload_returns_bad_request(client: TestClient) -> None:
     )
 
 
+def test_api_requires_valid_api_key(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    missing_key = TestClient(main.app)
+    assert missing_key.get("/health").status_code == 401
+
+    monkeypatch.setenv("FACESENSE_API_KEY", "changed-key")
+    assert client.get("/health").status_code == 401
+
+
+def test_registration_requires_consent(client: TestClient) -> None:
+    files = [
+        ("photos", ("face-1.jpg", image_bytes(), "image/jpeg")),
+        ("photos", ("face-2.jpg", image_bytes(), "image/jpeg")),
+        ("photos", ("face-3.jpg", image_bytes(), "image/jpeg")),
+    ]
+    response = client.post(
+        "/register",
+        data={"name": "Priya", "person_id": "person-2", "consent": "false"},
+        files=files,
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Consent is required for registration."
+
+
 def test_oversized_image_upload_returns_payload_too_large(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -138,6 +168,7 @@ def test_oversized_image_upload_returns_payload_too_large(
 def test_registration_and_attendance_block_spoof_attempts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("FACESENSE_API_KEY", "test-api-key")
     services = main.Services(
         registry=FakeRegistry(),
         pipeline=FakePipeline(),
@@ -145,7 +176,7 @@ def test_registration_and_attendance_block_spoof_attempts(
     )
     monkeypatch.setattr(main, "_services", services)
     monkeypatch.setattr(main, "_startup_error", None)
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"X-API-Key": "test-api-key"})
     photos = [
         ("photos", (f"face-{index}.jpg", image_bytes(), "image/jpeg"))
         for index in range(3)
@@ -153,7 +184,7 @@ def test_registration_and_attendance_block_spoof_attempts(
 
     registration = client.post(
         "/register",
-        data={"name": "Priya", "person_id": "person-2"},
+        data={"name": "Priya", "person_id": "person-2", "consent": "true"},
         files=photos,
     )
     attendance = client.post(
@@ -173,6 +204,7 @@ def test_registration_and_attendance_block_spoof_attempts(
 def test_logs_and_stats_endpoints_support_filters(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("FACESENSE_API_KEY", "test-api-key")
     services = main.Services(
         registry=FakeRegistry(),
         pipeline=FakePipeline(),
@@ -180,7 +212,7 @@ def test_logs_and_stats_endpoints_support_filters(
     )
     monkeypatch.setattr(main, "_services", services)
     monkeypatch.setattr(main, "_startup_error", None)
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"X-API-Key": "test-api-key"})
 
     analyze_response = client.post("/analyze", files=[upload()])
     assert analyze_response.status_code == 200

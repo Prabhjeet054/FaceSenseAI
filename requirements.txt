@@ -18,3 +18,4 @@ altair==5.4.1
 sqlalchemy==2.0.35
 pytest==8.3.3
 python-multipart==0.0.12
+cryptography==43.0.1

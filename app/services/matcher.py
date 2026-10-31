@@ -71,14 +71,8 @@ class FaceMatcher:
             raise ValueError("embedding must have a non-zero finite norm")
         return query / norm
 
-    @staticmethod
-    def _candidate(record: RegisteredPerson, query: np.ndarray) -> dict[str, Any]:
-        stored = np.frombuffer(record.embedding, dtype=np.float32)
-        if stored.shape != (EMBEDDING_DIMENSION,):
-            raise ValueError(
-                f"Stored embedding for {record.person_id} has invalid shape "
-                f"{stored.shape}"
-            )
+    def _candidate(self, record: RegisteredPerson, query: np.ndarray) -> dict[str, Any]:
+        stored = self.registry.decrypt_embedding(record.embedding)
         norm = np.linalg.norm(stored)
         if norm == 0 or not np.isfinite(norm):
             raise ValueError(f"Stored embedding for {record.person_id} is invalid")

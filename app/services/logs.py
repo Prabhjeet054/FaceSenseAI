@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import DateTime, Float, String, create_engine, func, select
+from sqlalchemy import DateTime, Float, String, create_engine, delete, func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -38,7 +38,10 @@ class RecognitionLogService:
         self,
         database_url: str | None = None,
         engine: Engine | None = None,
+        retention_days: int = 90,
     ) -> None:
+        if retention_days <= 0:
+            raise ValueError("retention_days must be positive")
         if engine is None:
             if database_url is None:
                 raise ValueError("database_url or engine is required")
@@ -50,6 +53,7 @@ class RecognitionLogService:
                 }
             engine = create_engine(database_url, **engine_options)
         self.engine = engine
+        self.retention_days = retention_days
         Base.metadata.create_all(self.engine)
         self.session_factory = sessionmaker(self.engine, expire_on_commit=False)
 
@@ -63,6 +67,7 @@ class RecognitionLogService:
         source: str,
     ) -> dict[str, Any]:
         """Persist one recognition event and return its public representation."""
+        self.delete_expired()
         if not 0 <= confidence <= 1:
             raise ValueError("confidence must be between 0 and 1")
         if not source.strip():
@@ -89,6 +94,7 @@ class RecognitionLogService:
         person_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Return events filtered by inclusive dates and person ID."""
+        self.delete_expired()
         start, end = self._date_bounds(date_from, date_to)
         statement = select(RecognitionEvent).order_by(RecognitionEvent.event_time.desc())
         if start is not None:
@@ -99,6 +105,19 @@ class RecognitionLogService:
             statement = statement.where(RecognitionEvent.person_id == person_id)
         with Session(self.engine) as session:
             return [self._to_dict(event) for event in session.scalars(statement)]
+
+    def delete_for_person(self, person_id: str) -> int:
+        with self.session_factory.begin() as session:
+            result = session.execute(
+                delete(RecognitionEvent).where(RecognitionEvent.person_id == person_id)
+            )
+            return int(result.rowcount or 0)
+
+    def delete_expired(self, now: datetime | None = None) -> int:
+        cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=self.retention_days)
+        with self.session_factory.begin() as session:
+            result = session.execute(delete(RecognitionEvent).where(RecognitionEvent.event_time < cutoff))
+            return int(result.rowcount or 0)
 
     def stats(
         self,

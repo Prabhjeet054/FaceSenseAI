@@ -16,6 +16,7 @@ from app.utils.draw import draw_faces
 
 
 DEFAULT_API_URL = os.getenv("FACESENSE_API_URL", "http://localhost:8000")
+API_KEY = os.getenv("FACESENSE_API_KEY", "")
 REQUEST_TIMEOUT_SECONDS = 30
 
 
@@ -46,6 +47,7 @@ def backend_request(
             params=params,
             files=files,
             data=data,
+            headers={"X-API-Key": API_KEY},
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
     except requests.RequestException as error:
@@ -191,6 +193,7 @@ def register_person_page() -> None:
     st.header("Register Person")
     name = st.text_input("Name")
     person_id = st.text_input("Person ID")
+    consent = st.checkbox("I consent to biometric data processing and storage.")
     photos = st.file_uploader(
         "Upload 3 to 5 face photos",
         type=["jpg", "jpeg", "png", "webp"],
@@ -200,6 +203,9 @@ def register_person_page() -> None:
     if st.button("Register person", type="primary"):
         if not name.strip() or not person_id.strip():
             st.error("Name and person ID are required.")
+            return
+        if not consent:
+            st.error("Consent is required for registration.")
             return
         if not 3 <= len(photos) <= 5:
             st.error("Registration requires 3 to 5 photos.")
@@ -212,7 +218,7 @@ def register_person_page() -> None:
             result = backend_request(
                 "POST",
                 "/register",
-                data={"name": name, "person_id": person_id},
+                data={"name": name, "person_id": person_id, "consent": "true"},
                 files=files,
             )
             st.success(f"Registered {result['name']} ({result['id']}).")
