@@ -229,3 +229,67 @@ def test_logs_and_stats_endpoints_support_filters(
     assert stats_response.json()["total"] == 1
     assert stats_response.json()["by_gender"] == {"male": 1}
     assert stats_response.json()["by_age_group"] == {"young adult": 1}
+
+
+def test_invalid_image_bytes_return_bad_request(client: TestClient) -> None:
+    response = client.post(
+        "/analyze",
+        files=[("image", ("face.jpg", b"not-image", "image/jpeg"))],
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded file is not a valid image."
+
+
+def test_attendance_success_marks_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    class LiveLiveness:
+        def check(self, frames: list[np.ndarray]) -> dict[str, object]:
+            return {"live": True, "status": "live", "score": 0.9}
+
+    class Attendance:
+        def __init__(self) -> None:
+            self.people: list[str] = []
+
+        def mark_present(self, person_id: str, source: str) -> dict[str, object]:
+            self.people.append(person_id)
+            return {"marked": True}
+
+    attendance_service = Attendance()
+    monkeypatch.setenv("FACESENSE_API_KEY", "test-api-key")
+    monkeypatch.setattr(
+        main,
+        "_services",
+        main.Services(
+            registry=FakeRegistry(),
+            pipeline=FakePipeline(),
+            liveness=LiveLiveness(),
+            attendance=attendance_service,
+        ),
+    )
+    monkeypatch.setattr(main, "_startup_error", None)
+    client = TestClient(main.app, headers={"X-API-Key": "test-api-key"})
+
+    response = client.post(
+        "/attendance",
+        files=[
+            ("frames", (f"frame-{index}.jpg", image_bytes(), "image/jpeg"))
+            for index in range(2)
+        ],
+    )
+
+    assert response.status_code == 200
+    assert attendance_service.people == ["person-1"]
+
+
+def test_service_startup_fails_closed_without_encryption_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FACESENSE_API_KEY", "test-api-key")
+    monkeypatch.delenv("FACESENSE_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setattr(main, "_services", None)
+    monkeypatch.setattr(main, "_startup_error", None)
+
+    response = TestClient(main.app, headers={"X-API-Key": "test-api-key"}).get("/logs")
+
+    assert response.status_code == 503
+    assert "FACESENSE_ENCRYPTION_KEY" in response.json()["detail"]

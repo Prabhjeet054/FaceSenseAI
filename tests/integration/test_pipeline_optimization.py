@@ -75,3 +75,20 @@ def test_optimized_pipeline_batches_models_and_reuses_embedding_cache() -> None:
     assert embedder.batch_sizes == [2]
     assert gender.batch_sizes == [2, 2]
     assert age.batch_sizes == [2, 2]
+
+
+def test_pipeline_handles_empty_images_and_single_only_embedders() -> None:
+    embedder = CountingEmbedder()
+    pipeline, _, _ = make_pipeline(embedder)
+    assert pipeline.analyze(np.array([], dtype=np.uint8)) == []
+
+    with np.testing.assert_raises(ValueError):
+        FacePipeline(
+            detector=TwoFaceDetector(),
+            embedder=embedder,
+            matcher=FixedMatcher(),
+            gender_model=CountingModel(0.7),
+            age_model=CountingModel(25.0),
+            emotion_model=FixedEmotion(),
+            embedding_cache_size=-1,
+        )

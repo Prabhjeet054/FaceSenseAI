@@ -1,0 +1,59 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    env_file:
+      - .env
+    environment:
+      FACESENSE_API_KEY: ${FACESENSE_API_KEY}
+      FACESENSE_ENCRYPTION_KEY: ${FACESENSE_ENCRYPTION_KEY}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - facesense_data:/app/data
+      - facesense_models:/app/models
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl --fail --silent
+          -H "X-API-Key: $${FACESENSE_API_KEY}"
+          http://localhost:8000/health
+          || exit 1
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    env_file:
+      - .env
+    environment:
+      FACESENSE_API_URL: http://api:8000
+      FACESENSE_API_KEY: ${FACESENSE_API_KEY}
+    ports:
+      - "${UI_PORT:-8501}:8501"
+    volumes:
+      - facesense_data:/app/data
+      - facesense_models:/app/models
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl --fail --silent http://localhost:8501/_stcore/health || exit 1
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  facesense_data:
+  facesense_models:

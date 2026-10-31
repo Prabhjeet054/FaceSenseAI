@@ -13,7 +13,7 @@ from streamlit.testing.v1 import AppTest
 import ui.app as dashboard
 
 
-APP_PATH = Path(__file__).parents[1] / "ui" / "app.py"
+APP_PATH = Path(__file__).parents[2] / "ui" / "app.py"
 
 
 def run_page(page: str) -> AppTest:

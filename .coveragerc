@@ -1,0 +1,17 @@
+[run]
+branch = True
+source =
+    app
+    config.py
+    benchmark_pipeline.py
+    convert_models.py
+
+[report]
+fail_under = 80
+show_missing = True
+skip_covered = True
+
+[paths]
+source =
+    app
+    */app
