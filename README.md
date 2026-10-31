@@ -135,6 +135,19 @@ The evaluator writes `reports/metrics.json`, `reports/gender_confusion_matrix.pn
 and `reports/age_error_by_bucket.png`. Model and dataset paths can be
 overridden with `--gender-model`, `--age-model`, and `--data-dir`.
 
+## Processing a video
+
+Process every frame of a video and save annotated output plus detection
+metadata:
+
+```bash
+python3 process_video.py input.mp4 \
+  --output-video reports/annotated_video.mp4 \
+  --output-csv reports/detections.csv
+```
+
+The CSV contains `timestamp`, `name`, `gender`, and `age` for every detection.
+
 ## Configuration
 
 Update [config.py](config.py) to change image dimensions, confidence thresholds,
