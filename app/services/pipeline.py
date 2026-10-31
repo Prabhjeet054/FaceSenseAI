@@ -76,6 +76,7 @@ class FacePipeline:
                 {
                     "box": [float(value) for value in bbox],
                     "name": match["name"],
+                    "person_id": match["id"],
                     "match_score": float(match["score"]),
                     "gender": gender,
                     "gender_confidence": max(

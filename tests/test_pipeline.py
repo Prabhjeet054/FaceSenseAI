@@ -6,6 +6,7 @@ from app.services.pipeline import FacePipeline
 EXPECTED_KEYS = {
     "box",
     "name",
+    "person_id",
     "match_score",
     "gender",
     "gender_confidence",

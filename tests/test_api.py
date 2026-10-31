@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 import config
 from app.api import main
+from app.services.logs import RecognitionLogService
 
 
 class FakePipeline:
@@ -18,6 +19,7 @@ class FakePipeline:
             {
                 "box": [1.0, 2.0, 30.0, 40.0],
                 "name": "Rahul",
+                "person_id": "person-1",
                 "match_score": 0.94,
                 "gender": "male",
                 "gender_confidence": 0.94,
@@ -124,3 +126,32 @@ def test_oversized_image_upload_returns_payload_too_large(
 
     assert response.status_code == 413
     assert response.json()["detail"] == "Image exceeds the 1 MB limit."
+
+
+def test_logs_and_stats_endpoints_support_filters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    services = main.Services(
+        registry=FakeRegistry(),
+        pipeline=FakePipeline(),
+        logs=RecognitionLogService(database_url="sqlite:///:memory:"),
+    )
+    monkeypatch.setattr(main, "_services", services)
+    monkeypatch.setattr(main, "_startup_error", None)
+    client = TestClient(main.app)
+
+    analyze_response = client.post("/analyze", files=[upload()])
+    assert analyze_response.status_code == 200
+
+    logs_response = client.get("/logs", params={"person_id": "person-1"})
+    assert logs_response.status_code == 200
+    logs = logs_response.json()
+    assert len(logs) == 1
+    assert logs[0]["person_id"] == "person-1"
+    assert logs[0]["source"] == "api"
+
+    stats_response = client.get("/stats", params={"person_id": "person-1"})
+    assert stats_response.status_code == 200
+    assert stats_response.json()["total"] == 1
+    assert stats_response.json()["by_gender"] == {"male": 1}
+    assert stats_response.json()["by_age_group"] == {"young adult": 1}

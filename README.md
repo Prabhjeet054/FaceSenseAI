@@ -158,7 +158,10 @@ python3 -m uvicorn app.api.main:app --reload
 ```
 
 The API provides `GET /health`, `POST /analyze`, `POST /register`,
-`GET /people`, and `DELETE /people/{person_id}`. Image uploads must be JPEG,
+`GET /people`, `DELETE /people/{person_id}`, `GET /logs`, and `GET /stats`.
+Recognition events are stored in SQLite when `/analyze` identifies faces.
+`/logs` accepts optional `date_from`, `date_to`, and `person_id` filters;
+`/stats` returns counts grouped by gender, age group, and day. Image uploads must be JPEG,
 PNG, or WebP files no larger than 10 MB. Registration accepts three to five
 photos as multipart form data using the `name`, `person_id`, and `photos`
 fields.

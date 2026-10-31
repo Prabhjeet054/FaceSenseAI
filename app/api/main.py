@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -15,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 import config
 from app.core.embedder import FaceEmbedder
 from app.services.matcher import FaceMatcher
+from app.services.logs import RecognitionLogService
 from app.services.pipeline import FacePipeline
 from app.services.registry import FaceRegistry
 
@@ -24,6 +26,7 @@ class FaceResult(BaseModel):
 
     box: list[float]
     name: str
+    person_id: str | None = None
     match_score: float
     gender: str
     gender_confidence: float
@@ -45,10 +48,29 @@ class HealthResponse(BaseModel):
     models_loaded: bool
 
 
+class RecognitionLogResponse(BaseModel):
+    id: int
+    person_id: str | None
+    time: str
+    gender: str
+    age: float
+    age_group: str
+    confidence: float
+    source: str
+
+
+class StatsResponse(BaseModel):
+    total: int
+    by_gender: dict[str, int]
+    by_age_group: dict[str, int]
+    by_day: dict[str, int]
+
+
 @dataclass
 class Services:
     registry: FaceRegistry
     pipeline: FacePipeline
+    logs: RecognitionLogService | Any | None = None
 
 
 app = FastAPI(title="FaceSense AI API", version="1.0.0")
@@ -78,7 +100,11 @@ def get_services() -> Services:
             embedder=embedder,
             matcher=FaceMatcher(registry),
         )
-        _services = Services(registry=registry, pipeline=pipeline)
+        _services = Services(
+            registry=registry,
+            pipeline=pipeline,
+            logs=RecognitionLogService(engine=registry.engine),
+        )
         return _services
     except (FileNotFoundError, ImportError, RuntimeError) as error:
         _startup_error = f"FaceSense AI services are unavailable: {error}"
@@ -121,7 +147,47 @@ async def analyze(
         results = services.pipeline.analyze(image_array)
     except (ValueError, RuntimeError) as error:
         raise HTTPException(status_code=422, detail=f"Could not analyze image: {error}") from error
+    if services.logs is not None:
+        for result in results:
+            services.logs.log(
+                person_id=result.get("person_id"),
+                event_time=None,
+                gender=result["gender"],
+                age=result["age"],
+                confidence=result["match_score"],
+                source="api",
+            )
     return AnalyzeResponse(faces=results)
+
+
+@app.get("/logs", response_model=list[RecognitionLogResponse])
+def list_logs(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    person_id: str | None = None,
+) -> list[RecognitionLogResponse]:
+    services = get_services()
+    try:
+        return services.logs.list(
+            date_from=date_from, date_to=date_to, person_id=person_id
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get("/stats", response_model=StatsResponse)
+def stats(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    person_id: str | None = None,
+) -> StatsResponse:
+    services = get_services()
+    try:
+        return services.logs.stats(
+            date_from=date_from, date_to=date_to, person_id=person_id
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @app.post("/register", response_model=PersonResponse, status_code=201)
