@@ -27,9 +27,10 @@ ATTENDANCE_DUPLICATE_WINDOW_SECONDS = 60
 
 # Model identifiers and filenames
 FACE_DETECTION_MODEL_NAME = "opencv_face_detector"
+FACE_DETECTION_MODEL_PATH = MODELS_DIR / "face_detection_yunet_2023mar.onnx"
+FACE_NMS_THRESHOLD = 0.30
 FACE_RECOGNITION_MODEL_NAME = "face_recognition"
 GENDER_MODEL_NAME = "gender_classifier"
 AGE_MODEL_NAME = "age_estimator"
 EMOTION_MODEL_NAME = "emotion_classifier"
 LIVENESS_MODEL_NAME = "liveness_detector"
-

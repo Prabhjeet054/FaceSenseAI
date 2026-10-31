@@ -32,10 +32,24 @@ FaceSenseAI/
 
 ## Getting started
 
-1. Install Python 3.11, then create and activate a virtual environment in
-   **Command Prompt**:
+1. Install Python 3.11, then create the virtual environment with that
+   interpreter. Do not reuse a `.venv` created with Python 3.14; TensorFlow
+   2.16.1 does not provide a compatible wheel for Python 3.14.
+
+   On **macOS/Linux**:
 
    ```bash
+   deactivate 2>/dev/null || true
+   rm -rf .venv
+   python3.11 -m venv .venv
+   source .venv/bin/activate
+   ```
+
+   In **Windows Command Prompt**:
+
+   ```bash
+   deactivate
+   rmdir /s /q .venv
    py -3.11 -m venv .venv
    .venv\Scripts\activate
    ```
@@ -43,15 +57,23 @@ FaceSenseAI/
    In **PowerShell**, activate it with:
 
    ```bash
+   deactivate
+   Remove-Item -Recurse -Force .venv
+   py -3.11 -m venv .venv
    .\.venv\Scripts\Activate.ps1
    ```
 
-2. Upgrade pip and install the pinned dependencies:
+2. Confirm that the new environment is using Python 3.11, then install the
+   pinned dependencies:
 
    ```bash
+   python --version
    python -m pip install --upgrade pip
    python -m pip install -r requirements.txt
    ```
+
+   The version check must print `Python 3.11.x`. If it prints `Python 3.14`,
+   deactivate the environment, remove `.venv`, and repeat step 1.
 
 3. Add registered face images to `data/known_faces/`.
 

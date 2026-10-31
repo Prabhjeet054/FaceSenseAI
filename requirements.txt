@@ -1,4 +1,4 @@
-# Python 3.11 is recommended for the pinned Windows-compatible stack.
+# Python 3.11 is required for this pinned dependency stack.
 opencv-python==4.10.0.84
 numpy==1.26.4
 pandas==2.2.2
