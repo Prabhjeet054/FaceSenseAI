@@ -59,6 +59,20 @@ FaceSenseAI/
 
 5. Start building the API, services, and dashboard in their respective folders.
 
+## Preparing UTKFace data
+
+Place UTKFace images named like `age_gender_race_date.jpg` in `data/raw/`,
+then run:
+
+```bash
+python data/prepare_dataset.py
+```
+
+The script skips invalid or corrupt images, resizes valid images to 128x128,
+creates stratified 70/15/15 train, validation, and test splits under
+`data/processed/`, and writes `data/processed/labels.csv`. Use
+`--input-dir`, `--output-dir`, or `--random-state` to customize the defaults.
+
 ## Configuration
 
 Update [config.py](config.py) to change image dimensions, confidence thresholds,
