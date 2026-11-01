@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 from typing import Any
 
 import cv2
@@ -11,6 +13,9 @@ import pandas as pd
 import requests
 import streamlit as st
 import altair as alt
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.utils.draw import draw_faces
 
