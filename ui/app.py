@@ -25,6 +25,99 @@ API_KEY = os.getenv("FACESENSE_API_KEY", "")
 REQUEST_TIMEOUT_SECONDS = 30
 
 
+def inject_styles() -> None:
+    """Apply the shared FaceSense visual system without changing app behavior."""
+    st.markdown(
+        """
+        <style>
+        :root {
+            --fs-bg: #0b1020;
+            --fs-panel: #121a2d;
+            --fs-panel-soft: #17223a;
+            --fs-border: rgba(148, 163, 184, .18);
+            --fs-text: #e8eefc;
+            --fs-muted: #9aa8c2;
+            --fs-accent: #65d8c6;
+            --fs-accent-strong: #38bdf8;
+        }
+        .stApp {
+            background:
+                radial-gradient(circle at 75% -10%, rgba(56, 189, 248, .12), transparent 32rem),
+                radial-gradient(circle at 0% 20%, rgba(101, 216, 198, .08), transparent 28rem),
+                var(--fs-bg);
+            color: var(--fs-text);
+        }
+        [data-testid="stHeader"] { background: transparent; }
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0d1528 0%, #0a1020 100%);
+            border-right: 1px solid var(--fs-border);
+        }
+        [data-testid="stSidebar"] > div:first-child { padding-top: 1.5rem; }
+        .fs-brand {
+            display: flex; align-items: center; gap: .75rem;
+            padding: .25rem .25rem 1.35rem;
+        }
+        .fs-brand-mark {
+            display: grid; place-items: center; width: 2.45rem; height: 2.45rem;
+            border-radius: .8rem; color: #07131d; font-size: 1.25rem;
+            background: linear-gradient(135deg, var(--fs-accent), var(--fs-accent-strong));
+            box-shadow: 0 8px 24px rgba(56, 189, 248, .22);
+        }
+        .fs-brand-title { font-weight: 750; letter-spacing: -.02em; font-size: 1.05rem; }
+        .fs-brand-subtitle { color: var(--fs-muted); font-size: .72rem; margin-top: .12rem; }
+        .fs-hero {
+            padding: 1.15rem 1.35rem; margin: .2rem 0 1.25rem;
+            border: 1px solid var(--fs-border); border-radius: 1rem;
+            background: linear-gradient(115deg, rgba(18, 26, 45, .96), rgba(23, 34, 58, .72));
+            box-shadow: 0 18px 50px rgba(0, 0, 0, .16);
+        }
+        .fs-eyebrow {
+            color: var(--fs-accent); text-transform: uppercase; letter-spacing: .14em;
+            font-size: .68rem; font-weight: 750; margin-bottom: .35rem;
+        }
+        .fs-hero h2 { margin: 0; font-size: 1.65rem; letter-spacing: -.04em; }
+        .fs-hero p { color: var(--fs-muted); margin: .4rem 0 0; }
+        [data-testid="stMetric"] {
+            background: rgba(18, 26, 45, .8); border: 1px solid var(--fs-border);
+            padding: .85rem 1rem; border-radius: .85rem;
+        }
+        [data-testid="stFileUploader"], [data-testid="stCameraInput"] {
+            border: 1px dashed rgba(101, 216, 198, .42); border-radius: .9rem;
+            background: rgba(18, 26, 45, .55); padding: .2rem;
+        }
+        .stButton > button, .stDownloadButton > button {
+            border-radius: .65rem; font-weight: 650; min-height: 2.55rem;
+        }
+        .stButton > button[kind="primary"] {
+            background: linear-gradient(100deg, #35bca9, #38bdf8);
+            color: #06121d; border: 0;
+        }
+        div[data-testid="stDataFrame"] { border: 1px solid var(--fs-border); border-radius: .8rem; overflow: hidden; }
+        .fs-note {
+            color: var(--fs-muted); font-size: .78rem; padding: .7rem .8rem;
+            border-left: 2px solid var(--fs-accent); background: rgba(101, 216, 198, .06);
+            border-radius: 0 .45rem .45rem 0;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def page_intro(eyebrow: str, title: str, description: str) -> None:
+    """Render a consistent page header while keeping the existing page title."""
+    st.markdown(
+        f"""
+        <section class="fs-hero">
+            <div class="fs-eyebrow">{eyebrow}</div>
+            <h2>{title}</h2>
+            <p>{description}</p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def api_url(path: str) -> str:
     return f"{st.session_state.api_url.rstrip('/')}/{path.lstrip('/')}"
 
@@ -171,6 +264,11 @@ def show_analysis(image: np.ndarray, results: list[dict[str, Any]]) -> None:
 
 def upload_and_analyze_page() -> None:
     st.header("Upload and Analyze")
+    page_intro(
+        "Analysis workspace",
+        "Understand every detected face",
+        "Upload a clear image to identify faces and estimate attributes in one pass.",
+    )
     uploaded = st.file_uploader(
         "Choose an image", type=["jpg", "jpeg", "png", "webp"], key="analysis_upload"
     )
@@ -184,6 +282,11 @@ def upload_and_analyze_page() -> None:
 
 def live_camera_page() -> None:
     st.header("Live Camera")
+    page_intro(
+        "Real-time capture",
+        "Analyze a live camera frame",
+        "Center one face in the frame, use even lighting, and capture a sharp image.",
+    )
     st.caption("Use your browser camera to capture a frame and analyze it.")
     captured = st.camera_input("Capture a face image")
     if captured is not None and st.button("Analyze captured frame", type="primary"):
@@ -196,6 +299,11 @@ def live_camera_page() -> None:
 
 def register_person_page() -> None:
     st.header("Register Person")
+    page_intro(
+        "Consent-first registry",
+        "Add a person securely",
+        "Provide consent and 3–5 varied face photos for reliable recognition.",
+    )
     name = st.text_input("Name")
     person_id = st.text_input("Person ID")
     consent = st.checkbox("I consent to biometric data processing and storage.")
@@ -233,6 +341,11 @@ def register_person_page() -> None:
 
 def logs_and_stats_page() -> None:
     st.header("Logs and Stats")
+    page_intro(
+        "Audit and insights",
+        "Explore recognition activity",
+        "Filter events by date or person to review system activity and trends.",
+    )
     first, last, person = st.columns(3)
     with first:
         date_from = st.date_input("From date", value=None)
@@ -260,6 +373,11 @@ def logs_and_stats_page() -> None:
 
 def attendance_page() -> None:
     st.header("Daily Attendance")
+    page_intro(
+        "Presence tracking",
+        "Review daily attendance",
+        "Export a clean Excel sheet for the selected day whenever you need it.",
+    )
     attendance_date = st.date_input("Attendance date", value=None, key="attendance_date")
     if st.button("Refresh attendance", type="primary"):
         params = {"attendance_date": str(attendance_date)} if attendance_date else {}
@@ -277,6 +395,11 @@ def attendance_page() -> None:
 
 def dashboard_page() -> None:
     st.header("Dashboard")
+    page_intro(
+        "Operations overview",
+        "See the bigger picture",
+        "Use recognition logs to monitor volume, demographics, and peak activity.",
+    )
     first, last = st.columns(2)
     with first:
         date_from = st.date_input("From date", value=None, key="dashboard_date_from")
@@ -293,6 +416,12 @@ def dashboard_page() -> None:
             if log_table.empty:
                 st.info("No recognition events found for the selected date range.")
                 return
+
+            metric_columns = st.columns(4)
+            metric_columns[0].metric("Detections", stats["total"])
+            metric_columns[1].metric("People", log_table["person_id"].nunique())
+            metric_columns[2].metric("Gender groups", len(stats["by_gender"]))
+            metric_columns[3].metric("Active days", len(stats["by_day"]))
 
             st.subheader("Gender distribution")
             st.altair_chart(
@@ -328,12 +457,28 @@ def dashboard_page() -> None:
 
 def main() -> None:
     st.set_page_config(page_title="FaceSense AI", page_icon="🙂", layout="wide")
+    inject_styles()
     if "api_url" not in st.session_state:
         st.session_state.api_url = DEFAULT_API_URL
     with st.sidebar:
-        st.title("FaceSense AI")
+        st.markdown(
+            """
+            <div class="fs-brand">
+                <div class="fs-brand-mark">◉</div>
+                <div>
+                    <div class="fs-brand-title">FaceSense AI</div>
+                    <div class="fs-brand-subtitle">Private vision workspace</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.session_state.api_url = st.text_input(
             "FastAPI URL", value=st.session_state.api_url
+        )
+        st.markdown(
+            '<div class="fs-note">Consent-based analysis · API-key protected</div>',
+            unsafe_allow_html=True,
         )
         page = st.radio(
             "Navigate",
