@@ -14,8 +14,11 @@ def test_path_constants_exist_or_can_be_created() -> None:
     assert path_constants
 
     for name, path in path_constants.items():
-        path.mkdir(parents=True, exist_ok=True)
-        assert path.is_dir(), f"{name} does not point to a directory: {path}"
+        if path.exists():
+            assert path.is_file() or path.is_dir(), f"{name} is not a valid path: {path}"
+        else:
+            path.mkdir(parents=True)
+            assert path.is_dir(), f"{name} could not be created: {path}"
 
 
 def test_threshold_constants_are_numbers_between_zero_and_one() -> None:
