@@ -11,8 +11,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN python -m pip install --upgrade pip \
-    && python -m pip install -r requirements.txt
+RUN sed '/^insightface==/d' requirements.txt > /tmp/requirements-without-insightface.txt \
+    && python -m pip install --no-cache-dir --default-timeout=600 \
+        -r /tmp/requirements-without-insightface.txt \
+    && python -m pip install --no-cache-dir --default-timeout=600 \
+        "Cython==0.29.37" \
+    && python -m pip install --no-cache-dir --default-timeout=600 \
+        --no-build-isolation "insightface==0.7.3"
 
 COPY app ./app
 COPY config.py .
