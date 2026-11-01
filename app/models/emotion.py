@@ -33,7 +33,13 @@ class EmotionClassifier:
 
         model = self._get_model()
         rgb_face = np.ascontiguousarray(face[:, :, ::-1])
-        predictions = model.detect_emotions(rgb_face)
+        height, width = rgb_face.shape[:2]
+        try:
+            predictions = model.detect_emotions(
+                rgb_face, face_rectangles=[(0, 0, width, height)]
+            )
+        except TypeError:
+            predictions = model.detect_emotions(rgb_face)
         if not predictions:
             raise ValueError("FER could not classify the supplied face")
         emotions = predictions[0].get("emotions", {})
