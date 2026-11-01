@@ -13,6 +13,7 @@ import tensorflow as tf
 import config
 from app.core.detector import FaceDetector
 from app.core.embedder import FaceEmbedder
+from app.core.insightface_attributes import InsightFaceAttributeModel
 from app.core.preprocess import preprocess_face
 from app.models.age_model import predict_age_group
 from app.models.emotion import EmotionClassifier
@@ -47,8 +48,10 @@ class FacePipeline:
             )
             matcher = FaceMatcher(registry)
         self.matcher = matcher
-        self.gender_model = gender_model or self._load_model(gender_model_path)
-        self.age_model = age_model or self._load_model(age_model_path)
+        self.gender_model = gender_model or self._load_attribute_model(
+            gender_model_path, "gender"
+        )
+        self.age_model = age_model or self._load_attribute_model(age_model_path, "age")
         self.emotion_model = emotion_model or EmotionClassifier()
         self.optimized = optimized
         self._embedding_cache: OrderedDict[str, np.ndarray] = OrderedDict()
@@ -258,6 +261,18 @@ class FacePipeline:
                 f"Model file not found: {path}. Train the required model first."
             )
         return tf.keras.models.load_model(path, compile=False)
+
+    @staticmethod
+    def _load_attribute_model(model_path: str | Path, attribute: str) -> Any:
+        path = Path(model_path)
+        if path.is_file():
+            return tf.keras.models.load_model(path, compile=False)
+        bundled_path = Path.home() / ".insightface" / "models" / "genderage.onnx"
+        if bundled_path.is_file():
+            return InsightFaceAttributeModel(bundled_path, attribute)
+        raise FileNotFoundError(
+            f"Model file not found: {path}. Train the required model first."
+        )
 
     @staticmethod
     def _meets_minimum_size(bbox: Any) -> bool:
