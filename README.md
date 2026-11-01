@@ -136,6 +136,11 @@ Place the required model artifacts in `models/` before starting the API:
 - `models/gender.h5`
 - `models/age.h5`
 
+The face embedding model is loaded from
+`~/.insightface/models/w600k_r50.onnx`. Download the InsightFace `buffalo_l`
+model pack and extract it into `~/.insightface/models/`; the pack contains
+`w600k_r50.onnx`.
+
 Download the YuNet detector artifact with:
 
 ```bash

@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 
 EMBEDDING_DIMENSION = 512
-DEFAULT_MODEL_NAME = "arcface_r100_v1"
+DEFAULT_MODEL_NAME = "w600k_r50.onnx"
+DEFAULT_MODEL_PATH = (
+    Path.home() / ".insightface" / "models" / DEFAULT_MODEL_NAME
+)
 
 
 class FaceEmbedder:
@@ -33,16 +37,26 @@ class FaceEmbedder:
                 "Install it with `python3 -m pip install insightface onnxruntime`."
             ) from error
 
+        model_name_or_path = (
+            str(DEFAULT_MODEL_PATH)
+            if model_name == DEFAULT_MODEL_NAME and DEFAULT_MODEL_PATH.is_file()
+            else model_name
+        )
         kwargs: dict[str, Any] = {}
         if providers is not None:
             kwargs["providers"] = list(providers)
         try:
-            self.model = get_model(model_name, **kwargs)
+            self.model = get_model(model_name_or_path, **kwargs)
+            if self.model is None:
+                raise RuntimeError(
+                    f"InsightFace model '{model_name_or_path}' was not found"
+                )
             self.model.prepare(ctx_id=0)
         except Exception as error:
             raise RuntimeError(
                 f"Could not load InsightFace model '{model_name}'. "
-                "The first use may need network access to download model files."
+                "Download the InsightFace buffalo_l model pack and place "
+                f"{DEFAULT_MODEL_NAME} at {DEFAULT_MODEL_PATH}."
             ) from error
 
     def embed(
