@@ -41,15 +41,16 @@ def inject_styles() -> None:
             --fs-accent-strong: #38bdf8;
         }
         .stApp {
-            background:
-                radial-gradient(circle at 75% -10%, rgba(56, 189, 248, .12), transparent 32rem),
-                radial-gradient(circle at 0% 20%, rgba(101, 216, 198, .08), transparent 28rem),
-                var(--fs-bg);
+            background: var(--fs-bg);
             color: var(--fs-text);
         }
         [data-testid="stHeader"] { background: transparent; }
+        ::selection { background: rgba(101, 216, 198, .35); color: #fff; }
+        :focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 3px; }
+        .block-container { max-width:  min(92vw, 1440px); padding-top: 2.25rem; }
+        main h2:first-of-type { display: none; }
         [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0d1528 0%, #0a1020 100%);
+            background: #0d1528;
             border-right: 1px solid var(--fs-border);
         }
         [data-testid="stSidebar"] > div:first-child { padding-top: 1.5rem; }
@@ -60,43 +61,44 @@ def inject_styles() -> None:
         .fs-brand-mark {
             display: grid; place-items: center; width: 2.45rem; height: 2.45rem;
             border-radius: .8rem; color: #07131d; font-size: 1.25rem;
-            background: linear-gradient(135deg, var(--fs-accent), var(--fs-accent-strong));
-            box-shadow: 0 8px 24px rgba(56, 189, 248, .22);
+            background: var(--fs-accent);
         }
         .fs-brand-title { font-weight: 750; letter-spacing: -.02em; font-size: 1.05rem; }
         .fs-brand-subtitle { color: var(--fs-muted); font-size: .72rem; margin-top: .12rem; }
         .fs-hero {
-            padding: 1.15rem 1.35rem; margin: .2rem 0 1.25rem;
-            border: 1px solid var(--fs-border); border-radius: 1rem;
-            background: linear-gradient(115deg, rgba(18, 26, 45, .96), rgba(23, 34, 58, .72));
-            box-shadow: 0 18px 50px rgba(0, 0, 0, .16);
+            padding: .25rem 0 1.4rem; margin: .2rem 0 1.5rem;
+            border-bottom: 1px solid var(--fs-border);
         }
-        .fs-eyebrow {
-            color: var(--fs-accent); text-transform: uppercase; letter-spacing: .14em;
-            font-size: .68rem; font-weight: 750; margin-bottom: .35rem;
-        }
-        .fs-hero h2 { margin: 0; font-size: 1.65rem; letter-spacing: -.04em; }
-        .fs-hero p { color: var(--fs-muted); margin: .4rem 0 0; }
+        .fs-hero h2 { margin: 0; font-size: clamp(1.55rem, 3vw, 2.15rem); letter-spacing: -.03em; }
+        .fs-hero p { color: var(--fs-muted); max-width: 70ch; margin: .55rem 0 0; line-height: 1.55; }
         [data-testid="stMetric"] {
-            background: rgba(18, 26, 45, .8); border: 1px solid var(--fs-border);
-            padding: .85rem 1rem; border-radius: .85rem;
+            background: var(--fs-panel); border: 1px solid var(--fs-border);
+            padding: .8rem 1rem; border-radius: .75rem;
         }
         [data-testid="stFileUploader"], [data-testid="stCameraInput"] {
             border: 1px dashed rgba(101, 216, 198, .42); border-radius: .9rem;
-            background: rgba(18, 26, 45, .55); padding: .2rem;
+            background: var(--fs-panel); padding: .2rem;
         }
         .stButton > button, .stDownloadButton > button {
-            border-radius: .65rem; font-weight: 650; min-height: 2.55rem;
+            border-radius: .55rem; font-weight: 650; min-height: 2.55rem;
+            transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
         }
         .stButton > button[kind="primary"] {
-            background: linear-gradient(100deg, #35bca9, #38bdf8);
-            color: #06121d; border: 0;
+            background: var(--fs-accent); color: #06121d; border: 0;
+        }
+        .stButton > button:hover, .stDownloadButton > button:hover { transform: translateY(-1px); }
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            background: rgba(18, 26, 45, .5); border-color: var(--fs-border);
         }
         div[data-testid="stDataFrame"] { border: 1px solid var(--fs-border); border-radius: .8rem; overflow: hidden; }
         .fs-note {
             color: var(--fs-muted); font-size: .78rem; padding: .7rem .8rem;
-            border-left: 2px solid var(--fs-accent); background: rgba(101, 216, 198, .06);
-            border-radius: 0 .45rem .45rem 0;
+            border: 1px solid var(--fs-border); background: rgba(101, 216, 198, .06);
+            border-radius: .55rem; line-height: 1.45;
+        }
+        @media (max-width: 700px) {
+            .block-container { padding: 1.25rem 1rem 2rem; }
+            .fs-hero { margin-bottom: 1rem; }
         }
         </style>
         """,
@@ -109,7 +111,6 @@ def page_intro(eyebrow: str, title: str, description: str) -> None:
     st.markdown(
         f"""
         <section class="fs-hero">
-            <div class="fs-eyebrow">{eyebrow}</div>
             <h2>{title}</h2>
             <p>{description}</p>
         </section>
@@ -334,7 +335,8 @@ def upload_and_analyze_page() -> None:
     )
     if uploaded is not None and st.button("Analyze image", type="primary"):
         try:
-            image, results = analyze_image(uploaded.getvalue(), uploaded.name)
+            with st.spinner("Screening image…"):
+                image, results = analyze_image(uploaded.getvalue(), uploaded.name)
             show_analysis(image, results)
         except (RuntimeError, ValueError, KeyError) as error:
             st.error(str(error))
@@ -351,7 +353,8 @@ def live_camera_page() -> None:
     captured = st.camera_input("Capture a face image")
     if captured is not None and st.button("Analyze captured frame", type="primary"):
         try:
-            image, results = analyze_image(captured.getvalue(), "camera.jpg")
+            with st.spinner("Screening captured frame…"):
+                image, results = analyze_image(captured.getvalue(), "camera.jpg")
             show_analysis(image, results)
         except (RuntimeError, ValueError, KeyError) as error:
             st.error(str(error))
@@ -388,12 +391,13 @@ def register_person_page() -> None:
             for photo in photos
         ]
         try:
-            result = backend_request(
-                "POST",
-                "/register",
-                data={"name": name, "person_id": person_id, "consent": "true"},
-                files=files,
-            )
+            with st.spinner("Registering face profile…"):
+                result = backend_request(
+                    "POST",
+                    "/register",
+                    data={"name": name, "person_id": person_id, "consent": "true"},
+                    files=files,
+                )
             st.success(f"Registered {result['name']} ({result['id']}).")
         except (RuntimeError, KeyError) as error:
             st.error(str(error))
@@ -416,10 +420,15 @@ def logs_and_stats_page() -> None:
     params = date_filter_params(date_from, date_to, person_id)
     if st.button("Refresh logs", type="primary"):
         try:
-            logs = backend_request("GET", "/logs", params=params)
-            stats = backend_request("GET", "/stats", params=params)
+            with st.spinner("Loading recognition activity…"):
+                logs = backend_request("GET", "/logs", params=params)
+                stats = backend_request("GET", "/stats", params=params)
             st.subheader("Recognition logs")
-            st.dataframe(pd.DataFrame(logs), hide_index=True, use_container_width=True)
+            log_table = pd.DataFrame(logs)
+            if log_table.empty:
+                st.info("No recognition events match these filters.")
+            else:
+                st.dataframe(log_table, hide_index=True, use_container_width=True)
             st.subheader("Statistics")
             metric_columns = st.columns(4)
             metric_columns[0].metric("Total", stats["total"])
@@ -442,13 +451,17 @@ def attendance_page() -> None:
     if st.button("Refresh attendance", type="primary"):
         params = {"attendance_date": str(attendance_date)} if attendance_date else {}
         try:
-            records = backend_request("GET", "/attendance", params=params)
+            with st.spinner("Loading attendance records…"):
+                records = backend_request("GET", "/attendance", params=params)
             table = pd.DataFrame(records)
-            st.dataframe(table, hide_index=True, use_container_width=True)
-            export_url = api_url("/attendance/export")
-            if params:
-                export_url = f"{export_url}?attendance_date={attendance_date}"
-            st.link_button("Download Excel attendance sheet", export_url)
+            if table.empty:
+                st.info("No attendance records were found for this date.")
+            else:
+                st.dataframe(table, hide_index=True, use_container_width=True)
+                export_url = api_url("/attendance/export")
+                if params:
+                    export_url = f"{export_url}?attendance_date={attendance_date}"
+                st.link_button("Download Excel attendance sheet", export_url)
         except (RuntimeError, KeyError) as error:
             st.error(str(error))
 
@@ -469,8 +482,9 @@ def dashboard_page() -> None:
 
     if st.button("Refresh dashboard", type="primary"):
         try:
-            logs = backend_request("GET", "/logs", params=params)
-            stats = backend_request("GET", "/stats", params=params)
+            with st.spinner("Updating dashboard…"):
+                logs = backend_request("GET", "/logs", params=params)
+                stats = backend_request("GET", "/stats", params=params)
             log_table = pd.DataFrame(logs)
 
             if log_table.empty:
