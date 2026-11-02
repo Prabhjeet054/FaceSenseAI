@@ -244,7 +244,31 @@ python scripts/check_stack.py
 
 ## Data preparation and training
 
-Prepare UTKFace-style files named `age_gender_race_date.jpg`:
+Prepare the combined age-training dataset from the requested local archives.
+`archive (5).zip` contributes exact UTKFace ages; `archive (4).zip` contributes
+age-band labels as lower-weight interval midpoints:
+
+```bash
+python -m data.prepare_age_datasets \
+  --archive-5 "$HOME/Downloads/archive (5).zip" \
+  --archive-4 "$HOME/Downloads/archive (4).zip" \
+  --output-dir data/processed_age
+```
+
+Train the age model with the combined dataset:
+
+```bash
+python train_age.py \
+  --data-dir data/processed_age \
+  --model-path models/age.h5
+```
+
+The trained model is an approximate estimator, not an exact biometric age
+measurement. Validate it on the held-out split before using its MAE as a
+deployment metric.
+
+For the original UTKFace-only workflow, prepare files named
+`age_gender_race_date.jpg`:
 
 ```bash
 python data/prepare_dataset.py
@@ -259,7 +283,7 @@ python train_gender.py
 Train the age model:
 
 ```bash
-python train_age.py
+python train_age.py --data-dir data/processed
 ```
 
 Convert the Keras models to TensorFlow Lite:

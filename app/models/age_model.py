@@ -45,7 +45,9 @@ def build_model(
     backbone.trainable = False
 
     inputs = keras.Input(shape=input_shape, name="face")
-    x = keras.applications.mobilenet_v2.preprocess_input(inputs)
+    x = layers.Rescaling(2.0, offset=-1.0, name="mobilenet_input_scaling")(
+        inputs
+    )
     x = backbone(x, training=False)
     x = layers.GlobalAveragePooling2D(name="global_average_pooling")(x)
     x = layers.Dropout(0.30)(x)

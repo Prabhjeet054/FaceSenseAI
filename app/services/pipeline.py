@@ -92,12 +92,22 @@ class FacePipeline:
             attribute_face = preprocess_face(
                 image, bbox, detection["landmarks"], model="gender_age"
             )
-            batch = np.expand_dims(attribute_face, axis=0)
+            batch = np.expand_dims(
+                self._attribute_input(attribute_face, self.gender_model), axis=0
+            )
             gender_probability = float(
                 np.asarray(self.gender_model.predict(batch, verbose=0)).reshape(-1)[0]
             )
             age = float(
-                np.asarray(self.age_model.predict(batch, verbose=0)).reshape(-1)[0]
+                np.asarray(
+                    self.age_model.predict(
+                        np.expand_dims(
+                            self._attribute_input(attribute_face, self.age_model),
+                            axis=0,
+                        ),
+                        verbose=0,
+                    )
+                ).reshape(-1)[0]
             )
             face_crop = self._crop_face(image, bbox)
             emotion = self.emotion_model.predict(face_crop)
@@ -154,8 +164,14 @@ class FacePipeline:
                 embeddings[index] = embedding
 
         attribute_faces = [
-            preprocess_face(
-                image, detection["bbox"], detection["landmarks"], model="gender_age"
+            self._attribute_input(
+                preprocess_face(
+                    image,
+                    detection["bbox"],
+                    detection["landmarks"],
+                    model="gender_age",
+                ),
+                self.gender_model,
             )
             for detection in detections
         ]
@@ -163,7 +179,22 @@ class FacePipeline:
         gender_probabilities = np.asarray(
             self.gender_model.predict(attribute_batch, verbose=0)
         ).reshape(-1)
-        ages = np.asarray(self.age_model.predict(attribute_batch, verbose=0)).reshape(-1)
+        age_batch = np.stack(
+            [
+                self._attribute_input(
+                    preprocess_face(
+                        image,
+                        detection["bbox"],
+                        detection["landmarks"],
+                        model="gender_age",
+                    ),
+                    self.age_model,
+                )
+                for detection in detections
+            ],
+            axis=0,
+        )
+        ages = np.asarray(self.age_model.predict(age_batch, verbose=0)).reshape(-1)
         if len(gender_probabilities) != len(detections) or len(ages) != len(detections):
             raise ValueError("attribute models returned an unexpected batch size")
 
@@ -252,6 +283,13 @@ class FacePipeline:
             "emotion": emotion["emotion"],
             "emotion_confidence": float(emotion["emotion_confidence"]),
         }
+
+    @staticmethod
+    def _attribute_input(face: np.ndarray, model: Any) -> np.ndarray:
+        """Match channel order to the attribute model's training contract."""
+        if isinstance(model, InsightFaceAttributeModel):
+            return face
+        return face[..., ::-1].copy()
 
     @staticmethod
     def _load_model(model_path: str | Path) -> Any:

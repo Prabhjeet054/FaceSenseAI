@@ -50,6 +50,15 @@ def load_labels(data_dir: Path, split: str) -> tuple[list[str], list[float]]:
     return paths, split_labels["age"].astype("float32").tolist()
 
 
+def load_sample_weights(data_dir: Path, split: str) -> list[float]:
+    """Load optional confidence weights for exact versus grouped labels."""
+    labels = pd.read_csv(data_dir / "labels.csv")
+    split_labels = labels[labels["split"] == split]
+    if "label_weight" not in split_labels:
+        return [1.0] * len(split_labels)
+    return split_labels["label_weight"].fillna(1.0).astype("float32").tolist()
+
+
 def decode_image(path: tf.Tensor, label: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
     """Read and normalize one RGB face image."""
     image = tf.io.read_file(path)
@@ -63,18 +72,22 @@ def decode_image(path: tf.Tensor, label: tf.Tensor) -> tuple[tf.Tensor, tf.Tenso
 def make_dataset(
     paths: list[str],
     labels: list[float],
+    sample_weights: list[float],
     batch_size: int,
     training: bool,
     seed: int,
 ) -> tf.data.Dataset:
     """Create a shuffled, batched, prefetched age dataset."""
-    dataset = tf.data.Dataset.from_tensor_slices((paths, labels))
+    dataset = tf.data.Dataset.from_tensor_slices((paths, labels, sample_weights))
     if training:
         dataset = dataset.shuffle(
             buffer_size=len(paths), seed=seed, reshuffle_each_iteration=True
         )
     return (
-        dataset.map(decode_image, num_parallel_calls=AUTOTUNE)
+        dataset.map(
+            lambda path, label, weight: (decode_image(path, label)[0], label, weight),
+            num_parallel_calls=AUTOTUNE,
+        )
         .batch(batch_size)
         .prefetch(AUTOTUNE)
     )
@@ -133,11 +146,18 @@ def train(
     tf.keras.utils.set_random_seed(seed)
     train_paths, train_ages = load_labels(data_dir, "train")
     validation_paths, validation_ages = load_labels(data_dir, "validation")
+    train_weights = load_sample_weights(data_dir, "train")
+    validation_weights = load_sample_weights(data_dir, "validation")
     train_dataset = make_dataset(
-        train_paths, train_ages, batch_size, training=True, seed=seed
+        train_paths, train_ages, train_weights, batch_size, training=True, seed=seed
     )
     validation_dataset = make_dataset(
-        validation_paths, validation_ages, batch_size, training=False, seed=seed
+        validation_paths,
+        validation_ages,
+        validation_weights,
+        batch_size,
+        training=False,
+        seed=seed,
     )
 
     model = build_model()

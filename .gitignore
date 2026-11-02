@@ -31,10 +31,18 @@ htmlcov/
 # Generated data and model artifacts
 data/raw/*
 data/processed/*
+data/processed_age/*
 data/known_faces/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/known_faces/.gitkeep
+# Local training archives and extracted copies
+archive*.zip
+archoive*.zip
+archive (4)/
+archive (5)/
+archoive (4)/
+archoive (5)/
 models/*
 !models/.gitkeep
 
