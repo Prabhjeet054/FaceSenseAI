@@ -246,19 +246,79 @@ def build_hourly_chart(log_table: pd.DataFrame) -> alt.Chart:
 
 def show_analysis(image: np.ndarray, results: list[dict[str, Any]]) -> None:
     annotated = cv2.cvtColor(draw_faces(image, results), cv2.COLOR_BGR2RGB)
+    st.subheader("Screening results")
+    detected = len(results)
+    identified = sum(
+        str(result.get("name", "")).lower() != "unknown" for result in results
+    )
+    average_match = (
+        float(np.mean([float(result.get("match_score", 0.0)) for result in results]))
+        if results
+        else 0.0
+    )
+    average_age = (
+        float(np.mean([float(result.get("age", 0.0)) for result in results]))
+        if results
+        else 0.0
+    )
+    summary = st.columns(4)
+    summary[0].metric("Faces detected", detected)
+    summary[1].metric("Registered matches", identified)
+    summary[2].metric("Avg. match confidence", f"{average_match:.0%}")
+    summary[3].metric("Avg. estimated age", f"{average_age:.1f}" if results else "—")
+
     left, right = st.columns(2)
     with left:
         st.image(annotated, caption="Analyzed image", use_column_width=True)
     with right:
-        columns = ["name", "gender", "gender_confidence", "age", "age_group", "match_score"]
         table = pd.DataFrame(results)
         if table.empty:
             st.info("No faces were detected.")
         else:
+            table["screening_status"] = np.where(
+                table["name"].str.lower().eq("unknown"),
+                "Unregistered / review",
+                "Registered match",
+            )
+            table["match_confidence"] = table["match_score"].map(
+                lambda value: f"{float(value):.1%}"
+            )
+            table["gender_confidence"] = table["gender_confidence"].map(
+                lambda value: f"{float(value):.1%}"
+            )
+            if "emotion_confidence" in table:
+                table["emotion_confidence"] = table["emotion_confidence"].map(
+                    lambda value: f"{float(value):.1%}"
+                )
+            table["age"] = table["age"].map(lambda value: f"{float(value):.1f}")
+            columns = [
+                "screening_status",
+                "name",
+                "gender",
+                "gender_confidence",
+                "age",
+                "age_group",
+                "emotion",
+                "emotion_confidence",
+                "match_confidence",
+            ]
             st.dataframe(
                 table[[column for column in columns if column in table]],
                 hide_index=True,
                 use_container_width=True,
+            )
+            unknown_count = int(
+                table["screening_status"].eq("Unregistered / review").sum()
+            )
+            if unknown_count:
+                st.warning(
+                    f"{unknown_count} face(s) were not confidently matched to the "
+                    "registry. Unknown is not an identity prediction; register the "
+                    "person with 3–5 consented photos before expecting a name."
+                )
+            st.caption(
+                f"Input frame: {image.shape[1]}×{image.shape[0]} px · "
+                "Age, gender, and emotion are approximate model estimates."
             )
 
 
