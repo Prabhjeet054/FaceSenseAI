@@ -28,12 +28,28 @@ class InsightFaceAttributeModel:
         images = np.asarray(batch, dtype=np.float32)
         if images.ndim != 4 or images.shape[-1] != 3:
             raise ValueError("attribute input must have shape (N, H, W, 3)")
-        resized = np.stack(
-            [cv2.resize(image, (96, 96), interpolation=cv2.INTER_AREA) for image in images]
-        )
-        nchw = np.transpose((resized * 255.0 - 127.5) / 128.0, (0, 3, 1, 2))
+        if not np.isfinite(images).all():
+            raise ValueError("attribute input must contain finite pixel values")
+        if images.min() < 0 or images.max() > 1:
+            raise ValueError("attribute input must be normalized to the [0, 1] range")
+
+        # genderage.onnx uses the original InsightFace preprocessing: BGR
+        # pixels in the [0, 255] range, not ArcFace-style [-1, 1] values.
         outputs = np.asarray(
-            self.session.run([self.output_name], {self.input_name: nchw})[0]
+            [
+                self.session.run(
+                    [self.output_name],
+                    {
+                        self.input_name: np.transpose(
+                            cv2.resize(image, (96, 96), interpolation=cv2.INTER_AREA)
+                            * 255.0,
+                            (2, 0, 1),
+                        )[None, ...].astype(np.float32),
+                    },
+                )[0][0]
+                for image in images
+            ],
+            dtype=np.float32,
         )
         if self.attribute == "age":
             return (outputs[:, 2:3] * 100.0).astype(np.float32)
