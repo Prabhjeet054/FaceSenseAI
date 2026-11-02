@@ -4,6 +4,7 @@ import pytest
 
 from data.prepare_dataset import parse_filename
 from data.prepare_age_datasets import parse_age_band, parse_exact_age
+from data.prepare_archive7_age_gender import parse_gender
 
 
 @pytest.mark.parametrize(
@@ -48,3 +49,11 @@ def test_parse_age_band_returns_interval_bounds(
     label: str, expected: tuple[float, float] | None
 ) -> None:
     assert parse_age_band(label) == expected
+
+
+@pytest.mark.parametrize(
+    ("label", "expected"),
+    [("0", 0), ("male", 0), ("men", 0), ("1", 1), ("female", 1), ("women", 1)],
+)
+def test_parse_gender_normalizes_dataset_labels(label: str, expected: int) -> None:
+    assert parse_gender(label) == expected

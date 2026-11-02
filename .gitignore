@@ -32,6 +32,7 @@ htmlcov/
 data/raw/*
 data/processed/*
 data/processed_age/*
+data/processed_archive7/*
 data/known_faces/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
@@ -39,6 +40,9 @@ data/known_faces/*
 # Local training archives and extracted copies
 archive*.zip
 archoive*.zip
+age_gender.csv
+archive (7)/
+archoive (7)/
 archive (4)/
 archive (5)/
 archoive (4)/
