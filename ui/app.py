@@ -49,6 +49,16 @@ def inject_styles() -> None:
         :focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 3px; }
         .block-container { max-width:  min(92vw, 1440px); padding-top: 2.25rem; }
         main h2:first-of-type { display: none; }
+        @media (prefers-reduced-motion: no-preference) {
+            .fs-hero { animation: fs-enter .36s cubic-bezier(.16, 1, .3, 1) both; }
+            @keyframes fs-enter {
+                from { opacity: 0; transform: translateY(8px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .fs-hero { animation: none; }
+        }
         [data-testid="stSidebar"] {
             background: #0d1528;
             border-right: 1px solid var(--fs-border);
@@ -79,14 +89,30 @@ def inject_styles() -> None:
             border: 1px dashed rgba(101, 216, 198, .42); border-radius: .9rem;
             background: var(--fs-panel); padding: .2rem;
         }
+        [data-testid="stImage"] img {
+            outline: 1px solid oklch(1 0 0 / .1); outline-offset: -1px;
+            border-radius: .55rem;
+        }
         .stButton > button, .stDownloadButton > button {
             border-radius: .55rem; font-weight: 650; min-height: 2.55rem;
-            transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
+            transition-property: border-color, background-color, transform;
+            transition-duration: 150ms;
+            transition-timing-function: ease-out;
         }
         .stButton > button[kind="primary"] {
             background: var(--fs-accent); color: #06121d; border: 0;
         }
-        .stButton > button:hover, .stDownloadButton > button:hover { transform: translateY(-1px); }
+        @media (hover: hover) {
+            .stButton > button:hover, .stDownloadButton > button:hover {
+                transform: translateY(-1px);
+            }
+        }
+        .stButton > button:active, .stDownloadButton > button:active {
+            transform: scale(.96);
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .stButton > button, .stDownloadButton > button { transition: none; }
+        }
         [data-testid="stVerticalBlockBorderWrapper"] {
             background: rgba(18, 26, 45, .5); border-color: var(--fs-border);
         }
@@ -538,7 +564,7 @@ def main() -> None:
         st.markdown(
             """
             <div class="fs-brand">
-                <div class="fs-brand-mark">◉</div>
+                <div class="fs-brand-mark">FS</div>
                 <div>
                     <div class="fs-brand-title">FaceSense AI</div>
                     <div class="fs-brand-subtitle">Private vision workspace</div>
