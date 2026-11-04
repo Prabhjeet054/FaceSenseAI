@@ -52,3 +52,7 @@ models/*
 
 # Notebook output
 .ipynb_checkpoints/
+data/processed_fairface/
+data/raw/fairface/
+spring-2021-dl-assignment-2.zip
+FairFace/

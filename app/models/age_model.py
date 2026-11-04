@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -17,6 +18,25 @@ AGE_GROUPS = {
     "adult": (36, 59),
     "senior": (60, float("inf")),
 }
+
+# Monotonic calibration fitted from the validation split of the prepared
+# archive (7) + age_gender.csv dataset. Values are raw prediction -> age.
+AGE_CALIBRATION_POINTS = (
+    (5.0, 7.04),
+    (10.0, 11.65),
+    (15.0, 17.82),
+    (20.0, 23.15),
+    (25.0, 27.74),
+    (30.0, 31.80),
+    (35.0, 37.56),
+    (40.0, 40.97),
+    (45.0, 47.24),
+    (50.0, 54.01),
+    (55.0, 57.97),
+    (60.0, 59.79),
+    (65.0, 65.46),
+    (70.0, 67.37),
+)
 
 
 def build_model(
@@ -78,4 +98,27 @@ def predict_age_group(age: float) -> str:
     raise ValueError(f"age is outside supported range: {age}")
 
 
-__all__ = ["AGE_GROUPS", "INPUT_SHAPE", "build_model", "predict_age_group"]
+def calibrate_age(raw_age: float) -> float:
+    """Correct the model's age-dependent bias using held-out calibration."""
+    raw_age = float(raw_age)
+    if not math.isfinite(raw_age) or raw_age < 0:
+        raise ValueError("raw_age must be a finite, non-negative number")
+
+    raw_points, calibrated_points = zip(*AGE_CALIBRATION_POINTS)
+    return float(
+        np.interp(
+            raw_age,
+            (0.0, *raw_points, 100.0),
+            (0.0, *calibrated_points, 100.0),
+        )
+    )
+
+
+__all__ = [
+    "AGE_CALIBRATION_POINTS",
+    "AGE_GROUPS",
+    "INPUT_SHAPE",
+    "build_model",
+    "calibrate_age",
+    "predict_age_group",
+]

@@ -11,11 +11,12 @@ import numpy as np
 import tensorflow as tf
 
 import config
+from config import GENDER_FEMALE_THRESHOLD
 from app.core.detector import FaceDetector
 from app.core.embedder import FaceEmbedder
 from app.core.insightface_attributes import InsightFaceAttributeModel
 from app.core.preprocess import preprocess_face
-from app.models.age_model import predict_age_group
+from app.models.age_model import calibrate_age, predict_age_group
 from app.models.emotion import EmotionClassifier
 from app.services.matcher import FaceMatcher
 from app.services.registry import FaceRegistry
@@ -98,7 +99,7 @@ class FacePipeline:
             gender_probability = float(
                 np.asarray(self.gender_model.predict(batch, verbose=0)).reshape(-1)[0]
             )
-            age = float(
+            age = calibrate_age(
                 np.asarray(
                     self.age_model.predict(
                         np.expand_dims(
@@ -111,7 +112,11 @@ class FacePipeline:
             )
             face_crop = self._crop_face(image, bbox)
             emotion = self.emotion_model.predict(face_crop)
-            gender = "female" if gender_probability >= 0.5 else "male"
+            gender = (
+                "female"
+                if gender_probability >= GENDER_FEMALE_THRESHOLD
+                else "male"
+            )
             results.append(
                 {
                     "box": [float(value) for value in bbox],
@@ -195,6 +200,7 @@ class FacePipeline:
             axis=0,
         )
         ages = np.asarray(self.age_model.predict(age_batch, verbose=0)).reshape(-1)
+        ages = np.asarray([calibrate_age(age) for age in ages])
         if len(gender_probabilities) != len(detections) or len(ages) != len(detections):
             raise ValueError("attribute models returned an unexpected batch size")
 
@@ -276,7 +282,11 @@ class FacePipeline:
             "name": match["name"],
             "person_id": match["id"],
             "match_score": float(match["score"]),
-            "gender": "female" if gender_probability >= 0.5 else "male",
+            "gender": (
+                "female"
+                if gender_probability >= GENDER_FEMALE_THRESHOLD
+                else "male"
+            ),
             "gender_confidence": max(gender_probability, 1.0 - gender_probability),
             "age": age,
             "age_group": predict_age_group(age),

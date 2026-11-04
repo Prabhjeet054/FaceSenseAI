@@ -85,6 +85,15 @@ def test_group_photo_results_have_schema_and_valid_confidences() -> None:
         assert 0 <= result["emotion_confidence"] <= 1
 
 
+def test_gender_uses_calibrated_threshold() -> None:
+    pipeline = make_pipeline()
+    pipeline.gender_model = FixedModel(0.30)
+
+    result = pipeline.analyze(np.ones((120, 220, 3), dtype=np.uint8))[0]
+
+    assert result["gender"] == "male"
+
+
 def test_image_with_no_faces_returns_empty_list() -> None:
     pipeline = make_pipeline()
 

@@ -37,6 +37,8 @@ LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", "90"))
 FACE_RECOGNITION_MODEL_NAME = "face_recognition"
 GENDER_MODEL_PATH = MODELS_DIR / "gender.h5"
 GENDER_MODEL_NAME = "gender_classifier"
+# Calibrated on the held-out archive (7) + age_gender.csv test split.
+GENDER_FEMALE_THRESHOLD = 0.315
 AGE_MODEL_PATH = MODELS_DIR / "age.h5"
 AGE_MODEL_NAME = "age_estimator"
 AGE_VALIDATION_MAE_LIMIT = 10.0

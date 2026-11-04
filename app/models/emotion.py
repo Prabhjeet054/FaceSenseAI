@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import cv2
 import numpy as np
 
 
@@ -32,7 +33,8 @@ class EmotionClassifier:
             raise ValueError("face must be a color image with three channels")
 
         model = self._get_model()
-        rgb_face = np.ascontiguousarray(face[:, :, ::-1])
+        gray_face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+        rgb_face = cv2.cvtColor(gray_face, cv2.COLOR_GRAY2RGB)
         height, width = rgb_face.shape[:2]
         try:
             predictions = model.detect_emotions(

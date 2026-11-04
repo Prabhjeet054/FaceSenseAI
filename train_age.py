@@ -29,10 +29,12 @@ def load_labels(data_dir: Path, split: str) -> tuple[list[str], list[float]]:
         )
 
     labels = pd.read_csv(labels_path)
-    required_columns = {"filename", "age", "split"}
+    required_columns = {"age", "split"}
     missing_columns = required_columns - set(labels.columns)
     if missing_columns:
         raise ValueError(f"labels.csv is missing columns: {sorted(missing_columns)}")
+    if "filename" not in labels.columns and "source_path" not in labels.columns:
+        raise ValueError("labels.csv must contain filename or source_path")
 
     split_labels = labels[labels["split"] == split]
     if split_labels.empty:
@@ -40,7 +42,11 @@ def load_labels(data_dir: Path, split: str) -> tuple[list[str], list[float]]:
     if split_labels["age"].isna().any() or (split_labels["age"] < 0).any():
         raise ValueError(f"Invalid age labels found in split '{split}'")
 
-    paths = [str(data_dir / split / filename) for filename in split_labels["filename"]]
+    path_column = "source_path" if "source_path" in split_labels else "filename"
+    paths = [
+        str(path) if path_column == "source_path" else str(data_dir / split / path)
+        for path in split_labels[path_column]
+    ]
     missing_paths = [path for path in paths if not Path(path).is_file()]
     if missing_paths:
         raise FileNotFoundError(

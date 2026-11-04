@@ -267,6 +267,26 @@ The trained model is an approximate estimator, not an exact biometric age
 measurement. Validate it on the held-out split before using its MAE as a
 deployment metric.
 
+For the FairFace retraining workflow, place FairFace under
+`~/Downloads/FairFace` and keep `spring-2021-dl-assignment-2.zip` under
+`~/Downloads`. The preparation script uses FairFace age bands and gender
+labels, plus the assignment archive's available labeled gender images:
+
+```bash
+python data/prepare_fairface_assignment.py
+python train_age.py \
+  --data-dir data/processed_fairface/age \
+  --model-path models/age.h5
+python train_gender.py \
+  --data-dir data/processed_fairface/gender \
+  --model-path models/gender.h5
+```
+
+The assignment archive includes age metadata pointing to original images that
+are not contained in the downloaded archive, so those unavailable images are
+not used for age training. FairFace age labels are interval midpoints and
+therefore produce approximate ages.
+
 For the original UTKFace-only workflow, prepare files named
 `age_gender_race_date.jpg`:
 
@@ -462,6 +482,10 @@ Age is an approximate regression estimate, not a verified age. Errors can be
 large for children, older adults, unusual lighting, makeup, occlusion, and
 domain shifts. Do not use the estimate for legal age verification or
 eligibility decisions.
+
+Gender decisions use the calibrated `GENDER_FEMALE_THRESHOLD` in `config.py`
+for the trained checkpoint; this threshold is validated on the project test
+split and does not make individual predictions certain.
 
 ### Recognition and liveness
 

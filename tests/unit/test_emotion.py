@@ -7,6 +7,8 @@ from app.models.emotion import EMOTIONS, EmotionClassifier
 class FakeFER:
     def detect_emotions(self, image: np.ndarray) -> list[dict[str, dict[str, float]]]:
         assert image.shape == (32, 32, 3)
+        assert np.array_equal(image[:, :, 0], image[:, :, 1])
+        assert np.array_equal(image[:, :, 1], image[:, :, 2])
         return [
             {
                 "emotions": {
