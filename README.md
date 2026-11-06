@@ -207,6 +207,12 @@ export FACESENSE_API_KEY="the-same-value-used-for-the-api"
 python -m streamlit run ui/app.py
 ```
 
+The **Auto Recognition** page analyzes each newly captured camera frame
+automatically. It reports the number of detected faces, matches consented
+registered identities from the face registry, and displays the available
+gender, approximate age, age group, emotion, and confidence details. The
+existing **Live Camera** page remains available for manual capture analysis.
+
 The API health endpoint confirms that the process is reachable. A successful
 `/analyze` request additionally requires the detector and trained gender/age
 model files.

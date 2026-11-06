@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -386,6 +387,42 @@ def live_camera_page() -> None:
             st.error(str(error))
 
 
+def auto_recognition_page() -> None:
+    st.header("Auto Recognition")
+    page_intro(
+        "Hands-free screening",
+        "Recognize faces as they arrive",
+        "Capture a frame and FaceSense automatically detects every face, matches "
+        "consented registry profiles, and shows the available attributes.",
+    )
+    st.info(
+        "Analysis starts automatically after each new camera capture. "
+        "No separate analyze button is required."
+    )
+    captured = st.camera_input("Point the camera at a face", key="auto_recognition_camera")
+    if captured is None:
+        st.caption("Keep the face centered and well lit, then capture a frame.")
+        return
+
+    image_data = captured.getvalue()
+    capture_id = hashlib.sha256(image_data).hexdigest()
+    if st.session_state.get("auto_recognition_capture_id") != capture_id:
+        try:
+            with st.spinner("Detecting and recognizing faces…"):
+                image, results = analyze_image(image_data, "auto-camera.jpg")
+            st.session_state.auto_recognition_capture_id = capture_id
+            st.session_state.auto_recognition_image = image
+            st.session_state.auto_recognition_results = results
+        except (RuntimeError, ValueError, KeyError) as error:
+            st.error(str(error))
+            return
+
+    image = st.session_state.get("auto_recognition_image")
+    results = st.session_state.get("auto_recognition_results")
+    if isinstance(image, np.ndarray) and isinstance(results, list):
+        show_analysis(image, results)
+
+
 def register_person_page() -> None:
     st.header("Register Person")
     page_intro(
@@ -587,6 +624,7 @@ def main() -> None:
                 "Daily Attendance",
                 "Upload and Analyze",
                 "Live Camera",
+                "Auto Recognition",
                 "Register Person",
                 "Logs and Stats",
             ],
@@ -599,6 +637,8 @@ def main() -> None:
         upload_and_analyze_page()
     elif page == "Live Camera":
         live_camera_page()
+    elif page == "Auto Recognition":
+        auto_recognition_page()
     elif page == "Register Person":
         register_person_page()
     else:
